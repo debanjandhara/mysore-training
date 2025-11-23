@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const categoryController = require('../controllers/category.controller');
 const { authenticateJwt } = require('../middleware/auth');
-const { requireRole } = require('../middleware/role');
 
 // Public Routes
 router.get('/', categoryController.list);
@@ -13,16 +12,15 @@ router.get('/:id/children', categoryController.getChildren);
 router.get('/:id/ancestors', categoryController.getAncestors);
 router.get('/:id/descendants', categoryController.getDescendants);
 
-// Protected Routes
+// Protected Routes (auth only, no role restriction)
 router.use(authenticateJwt);
-router.use(requireRole(['admin', 'blogger'])); 
 
 router.post('/', categoryController.create);
 router.put('/:id', categoryController.update);
 router.patch('/:id', categoryController.update);
 router.delete('/:id', categoryController.remove);
 
-// Admin only
-router.delete('/:id/hard', requireRole(['admin']), categoryController.hardRemove);
+// Hard delete (auth only, no role restriction)
+router.delete('/:id/hard', categoryController.hardRemove);
 
 module.exports = router;

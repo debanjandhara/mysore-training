@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const tagController = require('../controllers/tag.controller');
 const { authenticateJwt } = require('../middleware/auth');
-const { requireRole } = require('../middleware/role');
 
 // Public Routes
 router.get('/', tagController.list);
@@ -11,9 +10,8 @@ router.get('/suggest', tagController.suggest);
 router.get('/select-list', tagController.getSelectList);
 router.get('/:id', tagController.getById);
 
-// Protected Routes
+// Protected Routes (auth only, no role restriction)
 router.use(authenticateJwt);
-router.use(requireRole(['admin', 'blogger']));
 
 router.post('/', tagController.create);
 router.put('/:id', tagController.update);

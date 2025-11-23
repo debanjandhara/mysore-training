@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const commentController = require('../controllers/comment.controller');
 const { authenticateJwt } = require('../middleware/auth');
-const { requireRole } = require('../middleware/role');
 
 // Public Routes (Listing)
 router.get('/posts/:postId/comments', commentController.getByPost);
@@ -21,7 +20,7 @@ router.delete('/comments/:id', commentController.remove);
 // Voting
 router.post('/comments/:id/vote', commentController.vote);
 
-// Moderation
-router.patch('/comments/:id/status', requireRole(['admin', 'blogger']), commentController.updateStatus);
+// Moderation (auth only, no role restriction)
+router.patch('/comments/:id/status', commentController.updateStatus);
 
 module.exports = router;

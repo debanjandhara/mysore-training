@@ -56,7 +56,7 @@ const register = async (userData) => {
 
   const tokens = generateTokens(user);
   
-  user.refreshToken = tokens.refreshToken;
+  // user.refreshToken = tokens.refreshToken;
   await userRepository.saveUser(user);
 
   return { user, tokens };
