@@ -3,6 +3,7 @@ import React from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Profile from "./pages/Profile";
+import BlogDetails from "./pages/BlogDetails";
 import Auth from "./pages/Auth";
 import DashboardLayout from "./pages/Dashboard/DashboardLayout";
 import DashboardHome from "./pages/Dashboard/DashboardHome";
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/blog/:slug" element={<BlogDetails />} />
         </Route>
 
         {/* Dashboard Routes */}

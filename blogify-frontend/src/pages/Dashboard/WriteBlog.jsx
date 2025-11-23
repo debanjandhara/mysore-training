@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Bold, Italic, List, ListOrdered, Quote, Undo, Redo, Save } from 'lucide-react';
+import { Bold, Italic, List, ListOrdered, Quote, Undo, Redo, Save, CalendarDays } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const MenuBar = ({ editor }) => {
@@ -69,7 +69,10 @@ export default function WriteBlog() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Tech');
   const [tags, setTags] = useState('');
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [heroImageFile, setHeroImageFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState('');
 
   const editor = useEditor({
     extensions: [
@@ -88,20 +91,51 @@ export default function WriteBlog() {
 
   const handlePublish = async () => {
     if (!title || !editor.getHTML()) return;
-    
+
     setIsSubmitting(true);
-    
+
     // Mock API call
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    console.log({
-      title,
-      category,
-      tags: tags.split(',').map(t => t.trim()),
-      content: editor.getHTML()
-    });
-    
-    alert("Blog Published Successfully! (Check console for data)");
+
+    if (scheduledAt) {
+      // Scheduled publish
+      console.log({
+        title,
+        category,
+        tags: tags.split(',').map(t => t.trim()),
+        content: editor.getHTML(),
+        thumbnail: thumbnailFile ? { name: thumbnailFile.name, size: thumbnailFile.size, type: thumbnailFile.type } : null,
+        heroImage: heroImageFile ? { name: heroImageFile.name, size: heroImageFile.size, type: heroImageFile.type } : null,
+        status: 'Scheduled',
+        scheduledAt,
+      });
+
+      alert(`Blog scheduled successfully for ${new Date(scheduledAt).toLocaleString()} (check console for data)`);
+
+      // Reset form after scheduling
+      setTitle('');
+      setCategory('Tech');
+      setTags('');
+      setThumbnailFile(null);
+      setHeroImageFile(null);
+      setScheduledAt('');
+      if (editor) {
+        editor.commands.setContent('');
+      }
+    } else {
+      // Immediate publish
+      console.log({
+        title,
+        category,
+        tags: tags.split(',').map(t => t.trim()),
+        content: editor.getHTML(),
+        thumbnail: thumbnailFile ? { name: thumbnailFile.name, size: thumbnailFile.size, type: thumbnailFile.type } : null,
+        heroImage: heroImageFile ? { name: heroImageFile.name, size: heroImageFile.size, type: heroImageFile.type } : null,
+      });
+
+      alert("Blog Published Successfully! (Check console for data)");
+    }
+
     setIsSubmitting(false);
   };
 
@@ -154,6 +188,47 @@ export default function WriteBlog() {
           </div>
         </div>
 
+        {/* Images */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Thumbnail Image</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setThumbnailFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition file:mr-3 file:px-3 file:py-1 file:rounded-md file:border-0 file:bg-primary/10 file:text-xs file:font-medium file:text-primary"
+            />
+            <p className="text-xs text-muted-foreground">Used in cards and previews as the small thumbnail.</p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Main / Hero Image</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setHeroImageFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition file:mr-3 file:px-3 file:py-1 file:rounded-md file:border-0 file:bg-primary/10 file:text-xs file:font-medium file:text-primary"
+            />
+            <p className="text-xs text-muted-foreground">Shown at the top of the blog details page.</p>
+          </div>
+        </div>
+
+        {/* Schedule Date & Time */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CalendarDays size={16} />
+            Schedule publish (optional)
+          </label>
+          <input
+            type="datetime-local"
+            value={scheduledAt}
+            onChange={(e) => setScheduledAt(e.target.value)}
+            className="w-full md:w-64 px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition"
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave empty to publish immediately, or choose a future date and time to schedule.
+          </p>
+        </div>
+
         {/* Editor */}
         <div className="space-y-2">
            <label className="text-sm font-medium text-muted-foreground">Content</label>
@@ -168,10 +243,16 @@ export default function WriteBlog() {
           <button
             onClick={handlePublish}
             disabled={isSubmitting}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition shadow-lg shadow-primary/20 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition shadow-lg shadow-primary/20 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
           >
             <Save size={20} />
-            {isSubmitting ? 'Publishing...' : 'Publish Post'}
+            {isSubmitting
+              ? scheduledAt
+                ? 'Scheduling...'
+                : 'Publishing...'
+              : scheduledAt
+                ? 'Schedule & Publish'
+                : 'Publish Post'}
           </button>
         </div>
 

@@ -2,6 +2,7 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { LayoutDashboard, PenTool, FileText, MessageSquare, LogOut } from 'lucide-react';
+import Navbar from '../../components/Navbar';
 import { cn } from '../../lib/utils';
 
 const SidebarItem = ({ to, icon: Icon, label }) => (
@@ -24,7 +25,9 @@ const SidebarItem = ({ to, icon: Icon, label }) => (
 
 export default function DashboardLayout() {
   return (
-    <div className="flex min-h-screen bg-background text-foreground transition-colors duration-700">
+    <>
+      <Navbar />
+      <div className="flex min-h-screen bg-background text-foreground transition-colors duration-700">
       {/* Sidebar */}
       <aside className="w-64 bg-card/80 backdrop-blur-xl border-r border-border flex-shrink-0 fixed h-full z-30 hidden md:flex flex-col">
         <div className="p-6 border-b border-border">
@@ -59,6 +62,7 @@ export default function DashboardLayout() {
           <Outlet />
         </div>
       </main>
-    </div>
+      </div>
+    </>
   );
 }
