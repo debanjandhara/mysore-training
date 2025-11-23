@@ -4,7 +4,7 @@ info:
   description: Backend API for User, Auth, Posts and Saved Searches
   version: 1.0.0
 servers:
-  - url: http://localhost:3000/api
+  - url: http://localhost:4000/api
 components:
   securitySchemes:
     bearerAuth:
@@ -68,7 +68,612 @@ components:
         createdAt:
           type: string
           format: date-time
+    BlogSettings:
+      type: object
+      properties:
+        userId:
+          type: string
+        themeConfig:
+          type: object
+          properties:
+            themeId:
+              type: string
+            primaryColor:
+              type: string
+            fontFamily:
+              type: string
+            customCss:
+              type: string
+        savedDesignPresets:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              config:
+                type: object
+        socialIntegrations:
+          type: array
+          items:
+            type: object
+            properties:
+              platform:
+                type: string
+                enum: [twitter, facebook, linkedin]
+              autoShare:
+                type: boolean
+        seoDefaults:
+          type: object
+          properties:
+            defaultMetaTitle:
+              type: string
+            defaultMetaDescription:
+              type: string
+    Category:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        parentCategoryId:
+          type: string
+    Tag:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+    Comment:
+      type: object
+      properties:
+        _id:
+          type: string
+        postId:
+          type: string
+        userId:
+          type: string
+        parentId:
+          type: string
+        content:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected, deleted]
+        votes:
+          type: object
+          properties:
+            score:
+              type: number
+    DailyMetric:
+      type: object
+      properties:
+        postId:
+          type: string
+        date:
+          type: string
+          format: date-time
+        views:
+          type: number
+        socialShares:
+          type: number
+        uniqueVisitors:
+          type: number
+        trafficSources:
+          type: object
+          additionalProperties:
+            type: number
 paths:
+  /metrics/record:
+    post:
+      summary: Record a metric (view, share)
+      tags: [Analytics]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postId, type]
+              properties:
+                postId:
+                  type: string
+                type:
+                  type: string
+                  enum: [views, socialShares, uniqueVisitors]
+                source:
+                  type: string
+      responses:
+        200:
+          description: Metric recorded
+  /posts/{postId}/analytics:
+    get:
+      summary: Get post analytics
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: postId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: days
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Analytics data
+  /comments:
+    post:
+      summary: Create comment
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postId, content]
+              properties:
+                postId:
+                  type: string
+                parentId:
+                  type: string
+                content:
+                  type: string
+      responses:
+        201:
+          description: Created
+  /comments/{id}:
+    get:
+      summary: Get comment
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: includeChildren
+          schema:
+            type: boolean
+      responses:
+        200:
+          description: Comment data
+    put:
+      summary: Update comment
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+      responses:
+        200:
+          description: Updated
+    delete:
+      summary: Delete comment
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Deleted
+  /comments/{id}/status:
+    patch:
+      summary: Update status (Moderation)
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pending, approved, rejected, deleted]
+      responses:
+        200:
+          description: Updated
+  /comments/{id}/vote:
+    post:
+      summary: Vote on comment
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [upvote, downvote, remove]
+      responses:
+        200:
+          description: Voted
+  /comments/{id}/votes:
+    get:
+      summary: Get votes
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Vote info
+  /comments/{id}/replies:
+    get:
+      summary: Get replies
+      tags: [Comments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Replies list
+  /comments/tree:
+    get:
+      summary: Get comment tree
+      tags: [Comments]
+      parameters:
+        - in: query
+          name: postId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Tree
+  /posts/{postId}/comments:
+    get:
+      summary: Get post comments
+      tags: [Comments]
+      parameters:
+        - in: path
+          name: postId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: includeReplies
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of comments
+  /categories:
+    get:
+      summary: List categories
+      tags: [Category]
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: parentId
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of categories
+    post:
+      summary: Create category
+      tags: [Category]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+      responses:
+        201:
+          description: Created
+  /categories/{id}:
+    get:
+      summary: Get category
+      tags: [Category]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Category data
+    put:
+      summary: Update category
+      tags: [Category]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+      responses:
+        200:
+          description: Updated
+    delete:
+      summary: Delete category
+      tags: [Category]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Deleted
+  /tags:
+    get:
+      summary: List tags
+      tags: [Tag]
+      responses:
+        200:
+          description: List of tags
+    post:
+      summary: Create tag
+      tags: [Tag]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Tag'
+      responses:
+        201:
+          description: Created
+  /tags/{id}:
+    get:
+      summary: Get tag
+      tags: [Tag]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Tag data
+    put:
+      summary: Update tag
+      tags: [Tag]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Tag'
+      responses:
+        200:
+          description: Updated
+    delete:
+      summary: Delete tag
+      tags: [Tag]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Deleted
+  /settings:
+    get:
+      summary: Get blog settings
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Settings data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlogSettings'
+    post:
+      summary: Create blog settings
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogSettings'
+      responses:
+        201:
+          description: Created
+    put:
+      summary: Update blog settings
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlogSettings'
+      responses:
+        200:
+          description: Updated
+    delete:
+      summary: Delete settings
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        204:
+          description: Deleted
+  /settings/exists:
+    get:
+      summary: Check if settings exist
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Exists check result
+  /settings/theme:
+    get:
+      summary: Get theme config
+      tags: [Theme]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Theme config
+    patch:
+      summary: Update theme
+      tags: [Theme]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Updated
+  /settings/presets:
+    get:
+      summary: Get presets
+      tags: [Presets]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of presets
+    post:
+      summary: Add preset
+      tags: [Presets]
+      security:
+        - bearerAuth: []
+      responses:
+        201:
+          description: Added
+  /settings/social:
+    get:
+      summary: Get social integrations
+      tags: [Social]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of social integrations
+    post:
+      summary: Add social integration
+      tags: [Social]
+      security:
+        - bearerAuth: []
+      responses:
+        201:
+          description: Added
+  /settings/seo:
+    get:
+      summary: Get SEO defaults
+      tags: [SEO]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: SEO defaults
+    patch:
+      summary: Update SEO defaults
+      tags: [SEO]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Updated
   /auth/register:
     post:
       summary: Register a new user
@@ -351,21 +956,22 @@ paths:
           description: Deleted
   /posts:
     get:
-      summary: Get all posts
+      summary: List posts
       tags: [Post]
-      security:
-        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: categoryId
+          schema:
+            type: string
       responses:
         200:
           description: List of posts
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Post'
     post:
-      summary: Create post (Blogger only)
+      summary: Create post
       tags: [Post]
       security:
         - bearerAuth: []
@@ -381,20 +987,84 @@ paths:
                   type: string
                 content:
                   type: string
-                tags:
+                categoryIds:
                   type: array
                   items:
                     type: string
       responses:
         201:
           description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Post'
   /posts/{id}:
+    get:
+      summary: Get post by ID
+      tags: [Post]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Post data
     put:
       summary: Update post
+      tags: [Post]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Post'
+      responses:
+        200:
+          description: Updated
+    delete:
+      summary: Delete post
+      tags: [Post]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Deleted
+  /posts/slug/{slug}:
+    get:
+      summary: Get post by slug
+      tags: [Post]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Post data
+  /posts/{id}/publish:
+    post:
+      summary: Publish post
+      tags: [Post]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Published
+  /posts/{id}/multimedia:
+    post:
+      summary: Add multimedia
       tags: [Post]
       security:
         - bearerAuth: []
@@ -409,31 +1079,15 @@ paths:
           application/json:
             schema:
               type: object
+              required: [type, url]
               properties:
-                title:
+                type:
                   type: string
-                content:
+                  enum: [image, video]
+                url:
                   type: string
-                status:
+                caption:
                   type: string
       responses:
         200:
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Post'
-    delete:
-      summary: Delete post
-      tags: [Post]
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        200:
-          description: Deleted
+          description: Added
