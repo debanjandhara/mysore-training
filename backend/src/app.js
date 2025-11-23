@@ -7,7 +7,18 @@ const { connectDB } = require('./config/db');
 const userRoutes = require('./routes/user.routes');
 const authRoutes = require('./routes/auth.routes');
 const postRoutes = require('./routes/post.routes');
+const categoryRoutes = require('./routes/category.routes');
+const tagRoutes = require('./routes/tag.routes');
+const commentRoutes = require('./routes/comment.routes');
+const dailyMetricRoutes = require('./routes/dailyMetric.routes');
+const blogSettingsRoutes = require('./routes/blogSettings.routes');
 const errorLogger = require('./middleware/errorLogger');
+
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
+
+const swaggerDocument = YAML.load(path.join(__dirname, '..', 'swagger.yaml'));
 
 require('./config/passport');
 
@@ -19,10 +30,16 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
 // API Routes
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/tags', tagRoutes);
+app.use('/api', commentRoutes);
+app.use('/api', dailyMetricRoutes); // Mounts metrics routes
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/settings', blogSettingsRoutes);
 
 // Basic health check route
 app.get('/health', (req, res) => {
