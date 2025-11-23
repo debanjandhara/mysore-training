@@ -9,6 +9,7 @@ import { dashboardStats as stats, engagementData as chartData } from '../../lib/
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 
+
 const StatCard = ({ title, value, icon: Icon, colorClass }) => (
   <div className="bg-card p-6 rounded-xl shadow-sm border border-border flex items-center justify-between">
     <div>
