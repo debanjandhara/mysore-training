@@ -1,16 +1,52 @@
-
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Edit2, Trash2, Eye, Search } from 'lucide-react';
-import { mockBlogs } from '../../lib/mockData';
 import { cn } from '../../lib/utils';
+import { postService } from '../../services/postService';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ViewBlogs() {
-  const [blogs, setBlogs] = useState(mockBlogs);
+  const { token } = useAuth();
+  const [blogs, setBlogs] = useState([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadBlogs = async () => {
+      try {
+        const result = await postService.list({ limit: 100, status: 'published' });
+        const items = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
+
+        const mapped = items.map((post) => ({
+          id: post._id,
+          title: post.title,
+          category: Array.isArray(post.categoryIds) && post.categoryIds[0]
+            ? (post.categoryIds[0].name || 'Uncategorized')
+            : 'Uncategorized',
+          tags: Array.isArray(post.tagIds)
+            ? post.tagIds.map((t) => t.name || t)
+            : [],
+          publishedAt: post.publishedAt
+            ? new Date(post.publishedAt).toISOString().slice(0, 10)
+            : '',
+          status: post.status === 'published' ? 'Published' : 'Draft',
+        }));
+
+        setBlogs(mapped);
+      } catch (error) {
+        console.error('Failed to load blogs for dashboard:', error);
+        setBlogs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBlogs();
+  }, [token]);
 
   const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this blog?")) {
-      setBlogs(blogs.filter(b => b.id !== id));
+      // Optimistic local removal; actual delete wiring can be added later
+      setBlogs((prev) => prev.filter((b) => b.id !== id));
     }
   };
 
@@ -18,6 +54,22 @@ export default function ViewBlogs() {
     blog.title.toLowerCase().includes(search.toLowerCase()) ||
     blog.category.toLowerCase().includes(search.toLowerCase())
   );
+
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">All Blogs</h1>
+            <p className="text-muted-foreground mt-1">Manage your published content and drafts.</p>
+          </div>
+        </div>
+        <div className="bg-card rounded-xl shadow-sm border border-border p-8 text-center text-muted-foreground">
+          Loading blogs...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

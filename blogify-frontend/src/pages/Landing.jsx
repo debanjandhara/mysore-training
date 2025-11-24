@@ -1,6 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+
 import { motion, LayoutGroup } from "framer-motion";
 import { useTheme } from "../context/ThemeContext";
+import { postService } from "../services/postService";
+
 import { Button } from "../components/ui/Button";
 import { GlassCard } from "../components/ui/GlassCard";
 import { Search, SlidersHorizontal } from "lucide-react";
@@ -11,7 +15,7 @@ import { Search, SlidersHorizontal } from "lucide-react";
  * Hero Section Component
  * Displays the main value proposition and CTA.
  */
-const HeroSection = ({ currentTheme, gradientText }) => (
+const HeroSection = ({ currentTheme, gradientText, onStartWriting, onCreateAccount }) => (
   <section className="text-center space-y-8 pt-12 md:pt-20 col-span-12 max-w-4xl mx-auto">
     <div 
       className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-small font-medium uppercase tracking-wider transition-colors hover:bg-white/10 backdrop-blur-md"
@@ -30,8 +34,8 @@ const HeroSection = ({ currentTheme, gradientText }) => (
     </p>
     
     <div className="flex flex-wrap justify-center gap-4 pt-8">
-      <Button size="lg">Start Writing</Button>
-      <Button variant="outline" size="lg">Create Account</Button>
+      <Button size="lg" onClick={onStartWriting}>Start Writing</Button>
+      <Button variant="outline" size="lg" onClick={onCreateAccount}>Create Account</Button>
     </div>
   </section>
 );
@@ -128,161 +132,101 @@ const CategorySelector = ({ categories, activeCategory, setActiveCategory }) => 
   </section>
 );
 
-// Sample blog data for the grid
-const blogs = [
-  {
-    slug: "ai-powered-ui-design",
-    title: "AI-Powered UI Design: The New Creative Partner",
-    excerpt: "Exploring how AI tools are helping designers build smarter, faster, and more human-centered interfaces.",
-    tags: ["Design", "AI"],
-    image: "https://images.unsplash.com/photo-1677442136019-21780ecad995",
-  },
-  {
-    slug: "modern-web-development-2025",
-    title: "Modern Web Development in 2025",
-    excerpt: "From server components to edge functions, here’s what modern development looks like today.",
-    tags: ["Development"],
-    image: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97",
-  },
-  {
-    slug: "design-systems-that-scale",
-    title: "Design Systems That Actually Scale",
-    excerpt: "Lessons learned from building and maintaining design systems across growing product teams.",
-    tags: ["Design", "Development"],
-    image: "https://images.unsplash.com/photo-1558655146-d09347e92766",
-  },
-  {
-    slug: "how-startups-use-ai",
-    title: "How Startups Are Using AI to Move Faster",
-    excerpt: "A behind-the-scenes look at how small teams leverage AI to compete with larger companies.",
-    tags: ["AI", "Business"],
-    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71",
-  },
-  {
-    slug: "building-profitable-side-projects",
-    title: "Building Profitable Side Projects",
-    excerpt: "Turn your weekend ideas into real businesses with these practical growth strategies.",
-    tags: ["Business", "Lifestyle"],
-    image: "https://images.unsplash.com/photo-1492724441997-5dc865305da7",
-  },
-  {
-    slug: "deep-work-for-developers",
-    title: "Deep Work for Developers",
-    excerpt: "How to stay focused in a world full of notifications, meetings, and constant distractions.",
-    tags: ["Development", "Lifestyle"],
-    image: "https://images.unsplash.com/photo-1504691342899-a17bd2d7b583",
-  },
-  {
-    slug: "future-of-design-tools",
-    title: "The Future of Design Tools",
-    excerpt: "What the next generation of design software will look like as AI becomes the norm.",
-    tags: ["Design", "AI"],
-    image: "https://images.unsplash.com/photo-1581276879432-15a3d254c0a4",
-  },
-  {
-    slug: "scaling-tech-teams",
-    title: "Scaling Tech Teams Without Breaking Culture",
-    excerpt: "How to grow your engineering team while keeping communication and trust strong.",
-    tags: ["Business", "Development"],
-    image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c",
-  },
-  {
-    slug: "healthy-routines-for-creators",
-    title: "Healthy Routines for Designers & Developers",
-    excerpt: "Simple habits that help creative professionals stay energized and avoid burnout.",
-    tags: ["Lifestyle"],
-    image: "https://images.unsplash.com/photo-1544717305-2782549b5136",
-  },
-  {
-    slug: "no-code-ai-tools",
-    title: "No-Code AI Tools Are Changing Everything",
-    excerpt: "You don\'t need to be a machine learning expert to build smart products anymore.",
-    tags: ["AI", "Development"],
-    image: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485",
-  },
-  {
-    slug: "design-thinking-for-business",
-    title: "Design Thinking for Business Growth",
-    excerpt: "How design-first thinking can unlock new market opportunities and better products.",
-    tags: ["Design", "Business"],
-    image: "https://images.unsplash.com/photo-1556761175-4b46a572b786",
-  },
-  {
-    slug: "minimalist-digital-life",
-    title: "Minimalist Digital Life",
-    excerpt: "Reducing digital clutter to improve focus, creativity, and overall mental well-being.",
-    tags: ["Lifestyle"],
-    image: "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5",
-  },
-];
-
 /**
  * Blog Grid Component
  * Displays blog posts in a 12-column responsive grid.
  * Applies category and text search filters.
  */
-const BlogGrid = ({ activeCategory, searchText }) => {
+const BlogGrid = ({ activeCategory, searchText, blogs, loading }) => {
   const normalizedSearch = searchText?.trim().toLowerCase() || "";
 
   const categoryFiltered =
     activeCategory === "All"
       ? blogs
-      : blogs.filter((blog) => blog.tags?.includes(activeCategory));
+      : blogs.filter((blog) =>
+          Array.isArray(blog.tags) && blog.tags.includes(activeCategory)
+        );
 
   const visibleBlogs = !normalizedSearch
     ? categoryFiltered
     : categoryFiltered.filter((blog) => {
-        const inTitle = blog.title.toLowerCase().includes(normalizedSearch);
-        const inExcerpt = blog.excerpt.toLowerCase().includes(normalizedSearch);
-        const inTags = Array.isArray(blog.tags)
-          ? blog.tags.some((t) => t.toLowerCase().includes(normalizedSearch))
-          : false;
+        const title = blog.title || "";
+        const excerpt = blog.excerpt || "";
+        const tags = Array.isArray(blog.tags) ? blog.tags : [];
+
+        const inTitle = title.toLowerCase().includes(normalizedSearch);
+        const inExcerpt = excerpt.toLowerCase().includes(normalizedSearch);
+        const inTags = tags.some((t) =>
+          (t || "").toLowerCase().includes(normalizedSearch)
+        );
         return inTitle || inExcerpt || inTags;
       });
+
+  if (loading) {
+    return (
+      <section className="col-span-12 py-8 text-center text-muted-foreground">
+        Loading blogs...
+      </section>
+    );
+  }
 
   return (
     <section className="col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-8">
       {visibleBlogs.map((blog) => (
-        <GlassCard
-          key={blog.slug}
-          className="group relative overflow-hidden hover:border-primary/30 transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/5 p-0"
-        >
-          {/* Top image: fills full width of card, no padding, slightly rounded */}
-          <div
-            className="w-full aspect-[16/9] bg-gradient-to-br from-muted/20 to-muted/40 group-hover:scale-105 transition-transform duration-700 rounded-t-2xl"
-            style={
-              blog.image
-                ? {
-                    backgroundImage: `url(${blog.image})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }
-                : undefined
-            }
-          />
+        <Link to={`/blog/${blog.slug}`} key={blog.slug} className="block h-full">
+          <GlassCard
+            className="group h-full relative overflow-hidden hover:border-primary/30 transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/5 p-0 flex flex-col"
+          >
+            {/* Top image: fills full width of card, no padding, slightly rounded */}
+            <motion.div
+              layoutId={`blog-image-${blog.slug}`}
+              className="w-full aspect-[16/9] bg-gradient-to-br from-muted/20 to-muted/40 group-hover:scale-105 transition-transform duration-700 rounded-t-2xl overflow-hidden"
+            >
+              <img
+                src={blog.image}
+                alt={blog.title}
+                className="w-full h-full object-cover"
+              />
+            </motion.div>
 
-          {/* Content: padded section below image */}
-          <div className="p-6 space-y-4">
-            {Array.isArray(blog.tags) && blog.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {blog.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20"
-                  >
-                    {tag}
-                  </span>
-                ))}
+            {/* Content: padded section below image */}
+            <div className="p-6 space-y-4 flex-1 flex flex-col">
+              {Array.isArray(blog.tags) && blog.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {blog.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <motion.h3
+                layoutId={`blog-title-${blog.slug}`}
+                className="text-h3 font-bold leading-tight text-foreground group-hover:text-primary transition-colors"
+              >
+                {blog.title}
+              </motion.h3>
+              <p className="text-small text-foreground/60 line-clamp-2">
+                {blog.excerpt}
+              </p>
+              
+              <div className="mt-auto pt-4 flex items-center justify-between text-xs text-muted-foreground border-t border-border/50">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                    {blog.author[0]}
+                  </div>
+                  {blog.author}
+                </div>
+                {typeof blog.views === "number" && (
+                  <span>{blog.views.toLocaleString()} views</span>
+                )}
               </div>
-            )}
-            <h3 className="text-h3 font-bold leading-tight text-foreground group-hover:text-primary transition-colors">
-              {blog.title}
-            </h3>
-            <p className="text-small text-foreground/60 line-clamp-2">
-              {blog.excerpt}
-            </p>
-          </div>
-        </GlassCard>
+            </div>
+          </GlassCard>
+        </Link>
       ))}
     </section>
   );
@@ -355,9 +299,13 @@ const FilterModal = ({ isOpen, onClose }) => {
  */
 export default function Landing() {
   const { currentTheme } = useTheme();
+  const navigate = useNavigate();
+  
   const [activeCategory, setActiveCategory] = useState("All");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [blogs, setBlogs] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   const categories = ["All", "Design", "Development", "AI", "Business", "Lifestyle"];
 
@@ -367,9 +315,46 @@ export default function Landing() {
     WebkitTextFillColor: "transparent",
   };
 
+  useEffect(() => {
+    const loadBlogs = async () => {
+      try {
+        const result = await postService.list({ limit: 30 });
+        const items = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
+
+        const mapped = items.map((post) => ({
+          slug: post.slug,
+          title: post.title,
+          excerpt: post.seo?.metaDescription || "",
+          image: post.headerImage,
+          tags: Array.isArray(post.tags)
+            ? post.tags
+            : Array.isArray(post.tagIds)
+            ? post.tagIds.map((t) => t.name || t)
+            : [],
+          author: post.authorId?.name || "Unknown",
+          views: post.cachedStats?.viewCount ?? 0,
+        }));
+
+        setBlogs(mapped);
+      } catch (error) {
+        console.error("Failed to load blogs for landing:", error);
+        setBlogs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBlogs();
+  }, []);
+
   return (
     <div className="grid grid-cols-12 gap-y-16 gap-x-6 pb-20">
-      <HeroSection currentTheme={currentTheme} gradientText={gradientText} />
+      <HeroSection 
+        currentTheme={currentTheme} 
+        gradientText={gradientText}
+        onStartWriting={() => navigate("/dashboard/write-blog")}
+        onCreateAccount={() => navigate("/auth")}
+      />
       
       <V2AiSection 
         onOpenFilter={() => setIsFilterOpen(true)} 
@@ -386,6 +371,8 @@ export default function Landing() {
       <BlogGrid 
         activeCategory={activeCategory} 
         searchText={searchText}
+        blogs={blogs}
+        loading={loading}
       />
       
       <Newsletter />

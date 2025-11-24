@@ -1,28 +1,57 @@
- const express = require('express');
+const express = require('express');
 const mongoose = require('mongoose');
 const passport = require('passport');
+const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const { MONGO_URI } = require('./config/env');
 const { PORT } = require('./config/env');
 const { connectDB } = require('./config/db');
 const userRoutes = require('./routes/user.routes');
 const authRoutes = require('./routes/auth.routes');
 const postRoutes = require('./routes/post.routes');
+const categoryRoutes = require('./routes/category.routes');
+const tagRoutes = require('./routes/tag.routes');
+const commentRoutes = require('./routes/comment.routes');
+const dailyMetricRoutes = require('./routes/dailyMetric.routes');
+const blogSettingsRoutes = require('./routes/blogSettings.routes');
+const uploadRoutes = require('./routes/upload.routes');
 const errorLogger = require('./middleware/errorLogger');
+
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
+
+const swaggerDocument = YAML.load(path.join(__dirname, '..', 'swagger.yaml'));
 
 require('./config/passport');
 
 const app = express();
 
 // Middleware
+app.use(cors({
+  origin: 'http://localhost:5173', // Vite default port
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(passport.initialize());
 
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // API Routes
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/tags', tagRoutes);
+app.use('/api', commentRoutes);
+app.use('/api', dailyMetricRoutes); // Mounts metrics routes
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/settings', blogSettingsRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Basic health check route
 app.get('/health', (req, res) => {
