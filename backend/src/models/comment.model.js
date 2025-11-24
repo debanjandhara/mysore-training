@@ -27,7 +27,7 @@ const commentSchema = new Schema({
   status: { 
     type: String, 
     enum: ['pending', 'approved', 'rejected', 'deleted'], 
-    default: 'approved' 
+    default: 'pending' 
   },
   reportFlags: [{
     reportedBy: { type: Schema.Types.ObjectId, ref: 'User' },

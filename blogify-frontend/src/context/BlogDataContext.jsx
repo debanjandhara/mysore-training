@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { mockBlogs } from "../lib/mockData";
 
 const BlogDataContext = createContext(null);
 
 export function BlogDataProvider({ children }) {
-  const [blogs, setBlogs] = useState(() => mockBlogs || []);
+  const [blogs, setBlogs] = useState([]);
 
   // Simple front-end auto-publish for scheduled posts while app is open
   useEffect(() => {

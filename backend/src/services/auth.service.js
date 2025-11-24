@@ -3,8 +3,19 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../config/env'); // Ensure env.js exports JWT_REFRESH_SECRET too or use same
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const mongoose = require('mongoose');
 
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || JWT_SECRET; // Fallback
+
+// Basic mail transporter using env credentials
+const mailTransporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.NODEMAILER_EMAIL,
+    pass: process.env.NODEMAILER_PASSWORD,
+  },
+});
 
 /**
  * Generate Access and Refresh Tokens
@@ -38,7 +49,7 @@ const register = async (userData) => {
     error.code = 'EMAIL_EXISTS';
     throw error;
   }
-  
+
   if (username && await userRepository.findByUsername(username)) {
     const error = new Error('Username already in use');
     error.code = 'USERNAME_EXISTS';
@@ -55,7 +66,7 @@ const register = async (userData) => {
   });
 
   const tokens = generateTokens(user);
-  
+
   user.refreshToken = tokens.refreshToken;
   await userRepository.saveUser(user);
 
@@ -137,7 +148,7 @@ const refreshToken = async (token) => {
 /**
  * Forgot Password
  * @param {string} email 
- * @returns {string} token
+ * @returns {string} token (for dev/testing)
  */
 const forgotPassword = async (email) => {
   const user = await userRepository.findByEmail(email);
@@ -147,15 +158,83 @@ const forgotPassword = async (email) => {
     throw error;
   }
 
+  // Generate raw token and store a hashed version on the user
   const resetToken = crypto.randomBytes(20).toString('hex');
-  user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  user.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
   user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
 
   await userRepository.saveUser(user);
 
-  // In a real app, send email here.
-  // console.log(`Reset Token: ${resetToken}`);
-  return resetToken; 
+  // Build reset URL for frontend
+  const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const resetUrl = `${frontendBaseUrl}/reset-password?token=${resetToken}`;
+
+  // Simple HTML email with both code and link
+  const html = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; padding: 40px 20px; color: #333333;">
+      
+      <!-- Main Card Container -->
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); overflow: hidden;">
+        
+        <!-- Header with Brand Color -->
+        <div style="background-color: #4f46e5; padding: 30px; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px;">Blogify - Reset Link</h1>
+        </div>
+
+        <!-- Content Area -->
+        <div style="padding: 40px 40px 20px 40px;">
+          <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.5;">Hi ${user.name || 'there'},</p>
+          
+          <p style="margin: 0 0 24px; font-size: 16px; line-height: 1.5; color: #4b5563;">
+            We received a request to reset the password for your account. To proceed, please click the button below:
+          </p>
+
+          <!-- Primary Button -->
+          <div style="text-align: center; margin: 35px 0;">
+            <a href="${resetUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4);">
+              Reset your password
+            </a>
+          </div>
+
+          <!-- Divider / Copy Paste Option -->
+          <div style="border-top: 1px solid #e5e7eb; margin: 30px 0 20px 0;"></div>
+
+          <p style="margin: 0 0 10px; font-size: 13px; color: #6b7280;">
+            If the button doesn't work, you can copy and paste the following link directly into your browser:
+          </p>
+
+          <!-- Raw Link Container -->
+          <div style="background-color: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb; word-break: break-all;">
+            <a href="${resetUrl}" style="color: #4f46e5; text-decoration: none; font-size: 12px; line-height: 1.4;">${resetUrl}</a>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+          <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+            This link will expire in 10 minutes. If you did not request a password reset, you can safely ignore this email.
+          </p>
+        </div>
+        
+      </div>
+    </div>
+`;
+
+
+  if (process.env.NODEMAILER_EMAIL && process.env.NODEMAILER_PASSWORD) {
+    await mailTransporter.sendMail({
+      from: process.env.NODEMAILER_EMAIL,
+      to: user.email,
+      subject: 'Reset your Blogify password',
+      html,
+    });
+  }
+
+  // For dev/testing, return the raw token so it can be used directly.
+  return resetToken;
 };
 
 /**
@@ -165,7 +244,7 @@ const forgotPassword = async (email) => {
  */
 const resetPassword = async (token, newPassword) => {
   const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-  
+
   const user = await mongoose.model('User').findOne({
     resetPasswordToken: hashedToken,
     resetPasswordExpires: { $gt: Date.now() }
@@ -180,7 +259,7 @@ const resetPassword = async (token, newPassword) => {
   user.password = await bcrypt.hash(newPassword, 10);
   user.resetPasswordToken = undefined;
   user.resetPasswordExpires = undefined;
-  
+
   await userRepository.saveUser(user);
 };
 

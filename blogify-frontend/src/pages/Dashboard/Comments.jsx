@@ -1,39 +1,60 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Check, X, Trash2, MessageSquare } from 'lucide-react';
-import { mockComments } from '../../lib/mockData';
+import { commentService } from '../../services/commentService';
 import { cn } from '../../lib/utils';
 
 export default function Comments() {
-  const [comments, setComments] = useState(mockComments);
-  const [activeTab, setActiveTab] = useState('Pending'); // 'Pending' represents "Not Approved" or needing action
+  const [comments, setComments] = useState([]);
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'approved'
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const handleStatusChange = (id, newStatus) => {
-    setComments(comments.map(c => 
-      c.id === id ? { ...c, status: newStatus } : c
-    ));
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm("Delete this comment permanently?")) {
-      setComments(comments.filter(c => c.id !== id));
+  const fetchComments = async () => {
+    setIsLoading(true);
+    try {
+      const response = await commentService.list({ limit: 100, status: 'All' });
+      setComments(response.data);
+    } catch (err) {
+      console.error("Failed to fetch comments:", err);
+      setError("Failed to load comments");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Filter logic:
-  // "Approved" tab shows Approved comments.
-  // "Not Approved" tab shows Pending and Rejected comments (or maybe just Pending?).
-  // The user request said "Approved / Not Approved". Let's stick to that.
-  // "Not Approved" usually means Pending moderation, or explicitly Rejected.
-  // Let's show Pending in "Not Approved" and Approved in "Approved".
-  // Rejected ones might be less useful to see unless filtering for trash, but let's include Pending & Rejected in "Not Approved".
-  
+  useEffect(() => {
+    fetchComments();
+  }, []);
+
+  const handleStatusChange = async (id, newStatus) => {
+    try {
+      await commentService.updateStatus(id, newStatus);
+      setComments(prev => prev.map(c => 
+        c._id === id ? { ...c, status: newStatus } : c
+      ));
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Delete this comment permanently?")) {
+      try {
+        await commentService.delete(id);
+        setComments(prev => prev.filter(c => c._id !== id));
+      } catch (err) {
+        console.error("Failed to delete comment:", err);
+      }
+    }
+  };
+
   const filteredComments = comments.filter(c => {
-    if (activeTab === 'Approved') return c.status === 'Approved';
-    return c.status === 'Pending' || c.status === 'Rejected';
+    if (activeTab === 'approved') return c.status === 'approved';
+    return c.status === 'pending' || c.status === 'rejected';
   });
 
-  const TabButton = ({ name, count }) => (
+  const TabButton = ({ name, label, count }) => (
     <button
       onClick={() => setActiveTab(name)}
       className={cn(
@@ -43,7 +64,7 @@ export default function Comments() {
           : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted"
       )}
     >
-      {name} 
+      {label} 
       <span className={cn(
         "ml-2 px-2 py-0.5 rounded-full text-xs",
         activeTab === name ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
@@ -53,6 +74,9 @@ export default function Comments() {
     </button>
   );
 
+  if (isLoading) return <div>Loading comments...</div>;
+  if (error) return <div className="text-red-500">{error}</div>;
+
   return (
     <div className="space-y-8">
       <div>
@@ -61,15 +85,16 @@ export default function Comments() {
       </div>
 
       <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
-        {/* Tabs */}
         <div className="flex border-b border-border">
           <TabButton 
-            name="Pending" 
-            count={comments.filter(c => c.status === 'Pending' || c.status === 'Rejected').length} 
+            name="pending" 
+            label="Pending"
+            count={comments.filter(c => c.status === 'pending' || c.status === 'rejected').length} 
           />
           <TabButton 
-            name="Approved" 
-            count={comments.filter(c => c.status === 'Approved').length} 
+            name="approved" 
+            label="Approved"
+            count={comments.filter(c => c.status === 'approved').length} 
           />
         </div>
 
@@ -86,11 +111,15 @@ export default function Comments() {
             </thead>
             <tbody className="divide-y divide-border">
               {filteredComments.map((comment) => (
-                <tr key={comment.id} className="hover:bg-muted/50 transition-colors">
+                <tr key={comment._id} className="hover:bg-muted/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
-                      <span className="font-medium text-foreground">{comment.user}</span>
-                      <span className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">on {comment.postTitle}</span>
+                      <span className="font-medium text-foreground">
+                        {comment.userId?.name || comment.userId?.username || "Unknown"}
+                      </span>
+                      <span className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">
+                        on {comment.postId?.title || "Unknown Post"}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -99,20 +128,21 @@ export default function Comments() {
                   <td className="px-6 py-4">
                     <span className={cn(
                       "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-                      comment.status === "Approved" ? "bg-green-500/10 text-green-500" :
-                      comment.status === "Rejected" ? "bg-red-500/10 text-red-500" :
+                      comment.status === "approved" ? "bg-green-500/10 text-green-500" :
+                      comment.status === "rejected" ? "bg-red-500/10 text-red-500" :
                       "bg-yellow-500/10 text-yellow-500"
                     )}>
                       {comment.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground whitespace-nowrap">{comment.date}</td>
+                  <td className="px-6 py-4 text-sm text-muted-foreground whitespace-nowrap">
+                    {new Date(comment.createdAt).toLocaleDateString()}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                       {/* Approve Button */}
-                       {comment.status !== 'Approved' && (
+                       {comment.status !== 'approved' && (
                          <button 
-                           onClick={() => handleStatusChange(comment.id, 'Approved')}
+                           onClick={() => handleStatusChange(comment._id, 'approved')}
                            className="p-2 text-muted-foreground hover:text-green-500 hover:bg-green-500/10 rounded-lg transition" 
                            title="Approve"
                          >
@@ -120,10 +150,9 @@ export default function Comments() {
                          </button>
                        )}
 
-                       {/* Reject Button */}
-                       {comment.status !== 'Rejected' && (
+                       {comment.status !== 'rejected' && (
                          <button 
-                           onClick={() => handleStatusChange(comment.id, 'Rejected')}
+                           onClick={() => handleStatusChange(comment._id, 'rejected')}
                            className="p-2 text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10 rounded-lg transition" 
                            title="Reject"
                          >
@@ -131,9 +160,8 @@ export default function Comments() {
                          </button>
                        )}
                        
-                       {/* Delete Button */}
                        <button 
-                         onClick={() => handleDelete(comment.id)}
+                         onClick={() => handleDelete(comment._id)}
                          className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition" 
                          title="Delete"
                        >
@@ -146,7 +174,7 @@ export default function Comments() {
               {filteredComments.length === 0 && (
                 <tr>
                   <td colSpan="5" className="px-6 py-12 text-center text-muted-foreground">
-                    No comments found in this category.
+                    No comments found.
                   </td>
                 </tr>
               )}

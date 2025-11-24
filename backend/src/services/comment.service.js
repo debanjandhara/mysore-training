@@ -266,6 +266,28 @@ const getVotes = async (id, userId) => {
   };
 };
 
+/**
+ * List comments (Admin/General)
+ * @param {Object} query 
+ * @returns {Promise<Object>}
+ */
+const listComments = async (query) => {
+  const { page = 1, limit = 20, sort = 'new', status } = query;
+  
+  const filter = {};
+  if (status && status !== 'All') filter.status = status;
+  
+  let sortOption = { createdAt: -1 };
+  if (sort === 'old') sortOption = { createdAt: 1 };
+  
+  const skip = (page - 1) * limit;
+
+  const comments = await commentRepository.findMany(filter, { sort: sortOption, skip, limit: parseInt(limit) });
+  const total = await commentRepository.count(filter);
+
+  return { data: comments, total, page, limit };
+};
+
 module.exports = {
   createComment,
   getCommentById,
@@ -273,6 +295,7 @@ module.exports = {
   deleteComment,
   updateStatus,
   getPostComments,
+  listComments,
   getReplies,
   getCommentTree,
   voteComment,

@@ -1,9 +1,25 @@
 const authService = require('../services/auth.service');
 
+const setTokenCookie = (res, token) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+    sameSite: 'Lax', // Changed from Strict to Lax for better redirect compatibility
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  };
+  res.cookie('refreshToken', token, cookieOptions);
+};
+
 const register = async (req, res, next) => {
   try {
     const result = await authService.register(req.body);
-    res.status(201).json(result);
+    setTokenCookie(res, result.tokens.refreshToken);
+    // Don't send refreshToken in body
+    res.status(201).json({ 
+      user: result.user, 
+      token: result.tokens.accessToken,
+      message: "Registration successful"
+    });
   } catch (error) {
     next(error);
   }
@@ -13,7 +29,12 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const result = await authService.login(email, password);
-    res.json(result);
+    setTokenCookie(res, result.tokens.refreshToken);
+    res.json({ 
+      user: result.user, 
+      token: result.tokens.accessToken,
+      message: "Login successful"
+    });
   } catch (error) {
     next(error);
   }
@@ -21,14 +42,14 @@ const login = async (req, res, next) => {
 
 const logout = async (req, res, next) => {
   try {
-    // Assuming req.user is populated by middleware, but logout endpoint might be public if just clearing client side?
-    // However, prompt implies backend logout (invalidating refresh token).
-    // Need to ensure we have user id. If this is a protected route, req.user exists.
-    // If public, we need email/token in body?
-    // Usually Logout is protected.
     if (req.user) {
       await authService.logout(req.user._id);
     }
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Strict'
+    });
     res.json({ message: 'Logged out successfully', code: 'SUCCESS' });
   } catch (error) {
     next(error);
@@ -37,9 +58,21 @@ const logout = async (req, res, next) => {
 
 const refreshToken = async (req, res, next) => {
   try {
-    const { token } = req.body;
+    const token = req.cookies.refreshToken;
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Refresh token not found' });
+    }
+
     const result = await authService.refreshToken(token);
-    res.json(result);
+    
+    // Rotate refresh token
+    setTokenCookie(res, result.refreshToken);
+    
+    res.json({ 
+      accessToken: result.accessToken,
+      success: true 
+    });
   } catch (error) {
     next(error);
   }
@@ -69,13 +102,11 @@ const resetPassword = async (req, res, next) => {
 const googleCallback = async (req, res, next) => {
   try {
     const { user, tokens } = await authService.googleLogin(req.user);
-    // Redirect to frontend with tokens (adjust frontend URL as needed)
-    // For now returning JSON as per prompt style, but usually this is a redirect
-    // res.redirect(`http://localhost:3000/auth/success?token=${tokens.accessToken}`);
     
-    // Since this is an API, let's return JSON. 
-    // Note: Browser visiting /auth/google/callback directly will see JSON.
-    res.json({ user, tokens });
+    setTokenCookie(res, tokens.refreshToken);
+    
+    // Redirect to frontend with success flag, NO tokens
+    res.redirect(`http://localhost:5173/auth?loginSuccess=true`);
   } catch (error) {
     next(error);
   }

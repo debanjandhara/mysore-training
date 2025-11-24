@@ -31,7 +31,8 @@ const update = async (req, res, next) => {
 const remove = async (req, res, next) => {
   try {
     const force = req.query.force === 'true';
-    await categoryService.deleteCategory(req.params.id, req.user._id, force);
+    const userId = req.user ? req.user._id : null; // Handle unauthenticated request
+    await categoryService.deleteCategory(req.params.id, userId, force);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -104,6 +105,19 @@ const getSelectList = async (req, res, next) => {
   }
 };
 
+const migrateToTag = async (req, res, next) => {
+  try {
+    const { tagId } = req.body;
+    if (!tagId) {
+      return res.status(400).json({ message: 'tagId is required' });
+    }
+    await categoryService.migrateToTag(req.params.id, tagId);
+    res.status(200).json({ message: 'Category migrated to tag successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   create,
   getById,
@@ -115,5 +129,6 @@ module.exports = {
   getChildren,
   getAncestors,
   getDescendants,
-  getSelectList
+  getSelectList,
+  migrateToTag
 };

@@ -1,4 +1,6 @@
 const tagRepository = require('../repositories/tag.repository');
+const postRepository = require('../repositories/post.repository');
+const categoryRepository = require('../repositories/category.repository');
 
 // Helper: Error Factory
 const throwError = (message, code, status = 400) => {

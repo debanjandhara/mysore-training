@@ -41,7 +41,8 @@ const findMany = (filter, options) => {
     .sort(options.sort)
     .skip(options.skip)
     .limit(options.limit)
-    .populate('userId', 'name username profileImage');
+    .populate('userId', 'name username profileImage')
+    .populate('postId', 'title slug');
 };
 
 /**

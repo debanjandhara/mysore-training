@@ -13,7 +13,7 @@ router.post('/:id/stat/view', postController.viewStat);
 
 // Protected Routes
 router.use(authenticateJwt);
-router.use(requireRole(['blogger', 'admin']));
+// router.use(requireRole(['blogger', 'admin']));
 
 // CRUD
 router.post('/', postController.create);

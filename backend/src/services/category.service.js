@@ -1,4 +1,6 @@
 const categoryRepository = require('../repositories/category.repository');
+const tagRepository = require('../repositories/tag.repository');
+const postRepository = require('../repositories/post.repository');
 const mongoose = require('mongoose');
 
 // Helper: Error Factory
@@ -237,6 +239,32 @@ const getSelectList = async () => {
   }));
 };
 
+/**
+ * Migrate category to tag
+ * @param {string} categoryId 
+ * @param {string} tagId 
+ */
+const migrateToTag = async (categoryId, tagId) => {
+  const category = await categoryRepository.findById(categoryId);
+  if (!category) throwError('Category not found', 'CATEGORY_NOT_FOUND', 404);
+
+  const tag = await tagRepository.findById(tagId);
+  if (!tag) throwError('Tag not found', 'TAG_NOT_FOUND', 404);
+
+  // Update all posts: Add tagId, Remove categoryId
+  await postRepository.bulkUpdatePosts(
+    { categoryIds: categoryId },
+    { 
+      $addToSet: { tagIds: tagId },
+      $pull: { categoryIds: categoryId }
+    }
+  );
+
+  // Delete the category
+  // Assuming we use null for userId as this is an admin/system op and auth is removed
+  await categoryRepository.softDelete(categoryId, null);
+};
+
 module.exports = {
   createCategory,
   getCategory,
@@ -248,5 +276,6 @@ module.exports = {
   getCategoryChildren,
   getCategoryAncestors,
   getCategoryDescendants,
-  getSelectList
+  getSelectList,
+  migrateToTag
 };

@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const commentController = require('../controllers/comment.controller');
 const { authenticateJwt } = require('../middleware/auth');
-const { requireRole } = require('../middleware/role');
 
 // Public Routes (Listing)
-router.get('/posts/:postId/comments', commentController.getByPost);
+router.get('/comments', commentController.list); // Add list route (make it public or protected as needed, usually protected for admin list, but flexible here)
+router.get('/post/:postId/comments', commentController.getByPost);
 router.get('/comments/:id/replies', commentController.getReplies);
 router.get('/comments/tree', commentController.getTree);
 router.get('/comments/:id/votes', authenticateJwt, commentController.getVotes); // Auth optional but good for checking own vote
@@ -21,7 +21,7 @@ router.delete('/comments/:id', commentController.remove);
 // Voting
 router.post('/comments/:id/vote', commentController.vote);
 
-// Moderation
-router.patch('/comments/:id/status', requireRole(['admin', 'blogger']), commentController.updateStatus);
+// Moderation (authenticated but no role restriction)
+router.patch('/comments/:id/status', commentController.updateStatus);
 
 module.exports = router;

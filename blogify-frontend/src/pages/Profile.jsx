@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useTheme, THEMES } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
+import { authService } from "../services/authService";
 import { getFonts, loadFont } from "../services/fontService";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Upload, Camera } from "lucide-react";
 
 /**
  * Sidebar Navigation Item
@@ -185,6 +187,104 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState("appearance");
   const [localTheme, setLocalTheme] = useState(currentTheme);
 
+  const { token } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    username: "",
+    email: "",
+    bio: "",
+    location: "",
+    website: "",
+    profileImage: "",
+    socialLinks: {
+      twitter: "",
+      linkedin: "",
+      github: "",
+      instagram: ""
+    }
+  });
+
+  // Fetch profile data
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (token && activeTab === 'profile') {
+        setIsLoading(true);
+        try {
+          const { user } = await authService.getCurrentUser(token);
+          if (user) {
+            setFormData({
+              name: user.name || "",
+              username: user.username || "",
+              email: user.email || "",
+              bio: user.bio || "",
+              location: user.location || "",
+              website: user.website || "",
+              profileImage: user.profileImage || "",
+              socialLinks: {
+                twitter: user.socialLinks?.twitter || "",
+                linkedin: user.socialLinks?.linkedin || "",
+                github: user.socialLinks?.github || "",
+                instagram: user.socialLinks?.instagram || ""
+              }
+            });
+          }
+        } catch (error) {
+          console.error("Failed to load profile", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    loadProfile();
+  }, [token, activeTab]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    if (name.startsWith("social.")) {
+      const socialKey = name.split(".")[1];
+      setFormData(prev => ({
+        ...prev,
+        socialLinks: {
+          ...prev.socialLinks,
+          [socialKey]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const result = await authService.uploadImage(token, file);
+      if (result && result.data && result.data.url) {
+        // Construct full URL if needed, or store relative
+        const fullUrl = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"}${result.data.url}`;
+        setFormData(prev => ({ ...prev, profileImage: fullUrl }));
+      }
+    } catch (error) {
+      console.error("Upload failed", error);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await authService.updateProfile(token, formData);
+      alert("Profile updated successfully!"); 
+    } catch (error) {
+      console.error("Update failed", error);
+      alert("Failed to update profile.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   React.useEffect(() => {
     setLocalTheme(currentTheme);
   }, [currentTheme]);
@@ -260,35 +360,132 @@ export default function Profile() {
       <div className="flex-1 min-h-[600px] rounded-lg border border-border p-8 shadow-2xl shadow-black/5 glass-card">
         
         {activeTab === "profile" && (
-          <div className="max-w-xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="max-w-2xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div>
               <h3 className="text-h3 font-medium text-foreground">Profile Information</h3>
               <p className="text-body text-foreground/50 mt-2">Update your account details and public profile.</p>
             </div>
             
-            <div className="grid gap-6">
-              <div className="space-y-2">
-                <label className="text-small font-medium text-foreground/80">Username</label>
-                <input 
-                  type="text" 
-                  defaultValue="debanjan_dev" 
-                  className="flex h-12 w-full rounded-md border border-input bg-background/50 px-4 py-2 text-body shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
+            {isLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="animate-spin text-primary" size={32} />
               </div>
-              <div className="space-y-2">
-                <label className="text-small font-medium text-foreground/80">Email</label>
-                <input 
-                  type="email" 
-                  defaultValue="hello@example.com" 
-                  className="flex h-12 w-full rounded-md border border-input bg-background/50 px-4 py-2 text-body shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
+            ) : (
+              <div className="grid gap-8">
+                {/* Profile Image */}
+                <div className="flex items-center gap-6">
+                  <div className="relative group">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-border bg-secondary/10">
+                      {formData.profileImage ? (
+                        <img src={formData.profileImage} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-foreground/30">
+                          <Camera size={32} />
+                        </div>
+                      )}
+                    </div>
+                    <label className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-full">
+                      <Upload size={20} />
+                      <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+                    </label>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-foreground">Profile Photo</h4>
+                    <p className="text-small text-foreground/50 mt-1">Click to upload a new avatar. Max 5MB.</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-small font-medium text-foreground/80">Name</label>
+                    <input 
+                      type="text" 
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="flex h-12 w-full rounded-md border border-input bg-background/50 px-4 py-2 text-body shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-small font-medium text-foreground/80">Username</label>
+                    <input 
+                      type="text" 
+                      name="username"
+                      value={formData.username}
+                      onChange={handleInputChange}
+                      className="flex h-12 w-full rounded-md border border-input bg-background/50 px-4 py-2 text-body shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-small font-medium text-foreground/80">Bio</label>
+                    <textarea 
+                      name="bio"
+                      value={formData.bio}
+                      onChange={handleInputChange}
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-background/50 px-4 py-3 text-body shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                      placeholder="Tell us a little about yourself..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-small font-medium text-foreground/80">Email</label>
+                    <input 
+                      type="email" 
+                      name="email"
+                      value={formData.email}
+                      readOnly
+                      className="flex h-12 w-full rounded-md border border-input bg-secondary/20 px-4 py-2 text-body shadow-sm text-foreground/60 cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-small font-medium text-foreground/80">Location</label>
+                    <input 
+                      type="text" 
+                      name="location"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      className="flex h-12 w-full rounded-md border border-input bg-background/50 px-4 py-2 text-body shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-small font-medium text-foreground/80">Website</label>
+                    <input 
+                      type="url" 
+                      name="website"
+                      value={formData.website}
+                      onChange={handleInputChange}
+                      placeholder="https://yourwebsite.com"
+                      className="flex h-12 w-full rounded-md border border-input bg-background/50 px-4 py-2 text-body shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-border/50">
+                   <label className="text-small font-semibold uppercase tracking-wider text-foreground/40">Social Links</label>
+                   <div className="grid gap-4 md:grid-cols-2">
+                      <input type="text" name="social.twitter" placeholder="Twitter URL" value={formData.socialLinks.twitter} onChange={handleInputChange} className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+                      <input type="text" name="social.linkedin" placeholder="LinkedIn URL" value={formData.socialLinks.linkedin} onChange={handleInputChange} className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+                      <input type="text" name="social.github" placeholder="GitHub URL" value={formData.socialLinks.github} onChange={handleInputChange} className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+                      <input type="text" name="social.instagram" placeholder="Instagram URL" value={formData.socialLinks.instagram} onChange={handleInputChange} className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+                   </div>
+                </div>
+
+                <div className="pt-4 flex justify-end">
+                  <button 
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="inline-flex items-center justify-center rounded-md bg-primary px-8 py-3 text-small font-medium text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : "Save Changes"}
+                  </button>
+                </div>
               </div>
-              <div className="pt-4">
-                <button className="inline-flex items-center justify-center rounded-md bg-primary px-8 py-3 text-small font-medium text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  Save Changes
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
