@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 
 function NavLink({ to, label }) {
   const location = useLocation();
@@ -22,6 +23,7 @@ function NavLink({ to, label }) {
 
 export default function Navbar() {
   const { currentTheme } = useTheme();
+  const { isAuthenticated } = useAuth();
   
   return (
     <header className="sticky top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl transition-all duration-500">
@@ -36,9 +38,13 @@ export default function Navbar() {
         </Link>
         <nav className="flex gap-2">
           <NavLink to="/" label="Home" />
-          <NavLink to="/dashboard" label="Dashboard" />
-          <NavLink to="/profile" label="Profile" />
-          <NavLink to="/auth" label="Login" />
+          {isAuthenticated && (
+            <>
+              <NavLink to="/dashboard" label="Dashboard" />
+              <NavLink to="/profile" label="Profile" />
+            </>
+          )}
+          {!isAuthenticated && <NavLink to="/auth" label="Login" />}
         </nav>
       </div>
     </header>

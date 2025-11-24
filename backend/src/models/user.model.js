@@ -34,6 +34,27 @@ const userSchema = new mongoose.Schema(
     profileImage: {
       type: String,
     },
+    // New Profile Fields
+    bio: {
+      type: String,
+      maxLength: 500,
+      default: '',
+    },
+    location: {
+      type: String,
+      maxLength: 100,
+      default: '',
+    },
+    website: {
+      type: String,
+      default: '',
+    },
+    socialLinks: {
+      twitter: { type: String, default: '' },
+      linkedin: { type: String, default: '' },
+      github: { type: String, default: '' },
+      instagram: { type: String, default: '' }
+    },
     role: {
       type: String,
       enum: ['user', 'blogger', 'admin'],

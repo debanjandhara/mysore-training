@@ -1,14 +1,14 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area 
 } from 'recharts';
 import { ThumbsUp, MessageCircle, FileEdit } from 'lucide-react';
-import { dashboardStats as stats, engagementData as chartData } from '../../lib/mockData';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
-
+import { postService } from '../../services/postService';
+import { commentService } from '../../services/commentService';
 
 const StatCard = ({ title, value, icon: Icon, colorClass }) => (
   <div className="bg-card p-6 rounded-xl shadow-sm border border-border flex items-center justify-between">
@@ -24,6 +24,49 @@ const StatCard = ({ title, value, icon: Icon, colorClass }) => (
 
 export default function DashboardHome() {
   const { currentTheme } = useTheme();
+  const [stats, setStats] = useState({
+    totalLikes: 0,
+    totalComments: 0,
+    totalDrafts: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        // Fetch counts in parallel
+        const [draftsData, commentsData] = await Promise.all([
+          postService.list({ status: 'draft', limit: 1 }),
+          commentService.list({ limit: 1 })
+        ]);
+
+        setStats({
+          totalLikes: 0, // Aggregation requires backend support
+          totalComments: commentsData.total || 0,
+          totalDrafts: draftsData.total || 0
+        });
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  // Placeholder chart data (empty for now as we don't have history API)
+  const chartData = [
+    { name: 'Mon', views: 0, likes: 0 },
+    { name: 'Tue', views: 0, likes: 0 },
+    { name: 'Wed', views: 0, likes: 0 },
+    { name: 'Thu', views: 0, likes: 0 },
+    { name: 'Fri', views: 0, likes: 0 },
+    { name: 'Sat', views: 0, likes: 0 },
+    { name: 'Sun', views: 0, likes: 0 },
+  ];
+
+  if (loading) return <div>Loading stats...</div>;
 
   return (
     <div className="space-y-8">

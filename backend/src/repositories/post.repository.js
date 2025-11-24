@@ -113,6 +113,16 @@ const searchPosts = (query, options) => {
     .limit(options.limit);
 };
 
+/**
+ * Bulk update posts
+ * @param {Object} filter 
+ * @param {Object} update 
+ * @returns {Promise<Object>}
+ */
+const bulkUpdatePosts = (filter, update) => {
+  return Post.updateMany(filter, update);
+};
+
 module.exports = {
   createPost,
   findPostById,
@@ -123,5 +133,6 @@ module.exports = {
   findPosts,
   countPosts,
   incrementStats,
-  searchPosts
+  searchPosts,
+  bulkUpdatePosts
 };

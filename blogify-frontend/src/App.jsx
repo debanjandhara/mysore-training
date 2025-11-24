@@ -5,14 +5,21 @@ import Landing from "./pages/Landing";
 import Profile from "./pages/Profile";
 import BlogDetails from "./pages/BlogDetails";
 import Auth from "./pages/Auth";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import NotFound from "./pages/NotFound";
 import DashboardLayout from "./pages/Dashboard/DashboardLayout";
 import DashboardHome from "./pages/Dashboard/DashboardHome";
 import WriteBlog from "./pages/Dashboard/WriteBlog";
 import ViewBlogs from "./pages/Dashboard/ViewBlogs";
 import Comments from "./pages/Dashboard/Comments";
+import Tags from "./pages/Dashboard/Tags";
+import Categories from "./pages/Dashboard/Categories";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { useTheme } from "./context/ThemeContext";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 import { hexToRgba } from "./lib/utils";
 
 /**
@@ -53,38 +60,52 @@ export default function App() {
   const accentGradient = `linear-gradient(120deg, ${hexToRgba(currentTheme.primary, 0.08)}, rgba(255,255,255,0))`;
 
   return (
-    <div 
-      className="min-h-screen flex flex-col relative bg-background text-foreground transition-colors duration-700 ease-out overflow-x-hidden"
-      style={{ fontFamily: currentTheme.font }}
-    >
-      {/* Strict Page Accent (No Blobs) */}
+    <AuthProvider>
       <div 
-        className="page-accent"
-        style={{ background: accentGradient }}
-      />
+        className="min-h-screen flex flex-col relative bg-background text-foreground transition-colors duration-700 ease-out overflow-x-hidden"
+        style={{ fontFamily: currentTheme.font }}
+      >
+        {/* Strict Page Accent (No Blobs) */}
+        <div 
+          className="page-accent"
+          style={{ background: accentGradient }}
+        />
 
-      <Routes>
-        {/* Public Routes */}
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<Landing />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/blog/:slug" element={<BlogDetails />} />
-        </Route>
+        <Routes>
+          {/* Public Routes */}
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<Landing />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } />
+            <Route path="/blog/:slug" element={<BlogDetails />} />
+          </Route>
 
-        {/* Dashboard Routes */}
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<DashboardHome />} />
-          <Route path="write-blog" element={<WriteBlog />} />
-          <Route path="view-blogs" element={<ViewBlogs />} />
-          <Route path="comments" element={<Comments />} />
-        </Route>
+          {/* Dashboard Routes */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<DashboardHome />} />
+            <Route path="write-blog" element={<WriteBlog />} />
+            <Route path="view-blogs" element={<ViewBlogs />} />
+            <Route path="comments" element={<Comments />} />
+            <Route path="tags" element={<Tags />} />
+            <Route path="categories" element={<Categories />} />
+          </Route>
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Fallback */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
 
-      <GooeyFilter />
-    </div>
+        <GooeyFilter />
+      </div>
+    </AuthProvider>
   );
 }

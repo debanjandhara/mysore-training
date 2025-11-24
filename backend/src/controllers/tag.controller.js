@@ -73,6 +73,19 @@ const getSelectList = async (req, res, next) => {
   }
 };
 
+const migrateToCategory = async (req, res, next) => {
+  try {
+    const { categoryId } = req.body;
+    if (!categoryId) {
+      return res.status(400).json({ message: 'categoryId is required' });
+    }
+    await tagService.migrateToCategory(req.params.id, categoryId);
+    res.status(200).json({ message: 'Tag migrated to category successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   create,
   getById,
@@ -81,5 +94,6 @@ module.exports = {
   list,
   getTop,
   suggest,
-  getSelectList
+  getSelectList,
+  migrateToCategory
 };

@@ -14,6 +14,7 @@ const postSchema = new Schema({
   title: { type: String, required: true, trim: true },
   slug: { type: String, required: true, unique: true, lowercase: true },
   content: { type: String, required: true },
+  headerImage: { type: String, required: true },
   multimedia: [{
     type: { type: String, enum: ['image', 'video'], required: true },
     url: { type: String, required: true },

@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { motion, LayoutGroup } from "framer-motion";
 import { useTheme } from "../context/ThemeContext";
-import { blogs } from "../lib/blogsData";
+import { postService } from "../services/postService";
+
 import { Button } from "../components/ui/Button";
 import { GlassCard } from "../components/ui/GlassCard";
 import { Search, SlidersHorizontal } from "lucide-react";
@@ -136,24 +137,38 @@ const CategorySelector = ({ categories, activeCategory, setActiveCategory }) => 
  * Displays blog posts in a 12-column responsive grid.
  * Applies category and text search filters.
  */
-const BlogGrid = ({ activeCategory, searchText }) => {
+const BlogGrid = ({ activeCategory, searchText, blogs, loading }) => {
   const normalizedSearch = searchText?.trim().toLowerCase() || "";
 
   const categoryFiltered =
     activeCategory === "All"
       ? blogs
-      : blogs.filter((blog) => blog.tags?.includes(activeCategory));
+      : blogs.filter((blog) =>
+          Array.isArray(blog.tags) && blog.tags.includes(activeCategory)
+        );
 
   const visibleBlogs = !normalizedSearch
     ? categoryFiltered
     : categoryFiltered.filter((blog) => {
-        const inTitle = blog.title.toLowerCase().includes(normalizedSearch);
-        const inExcerpt = blog.excerpt.toLowerCase().includes(normalizedSearch);
-        const inTags = Array.isArray(blog.tags)
-          ? blog.tags.some((t) => t.toLowerCase().includes(normalizedSearch))
-          : false;
+        const title = blog.title || "";
+        const excerpt = blog.excerpt || "";
+        const tags = Array.isArray(blog.tags) ? blog.tags : [];
+
+        const inTitle = title.toLowerCase().includes(normalizedSearch);
+        const inExcerpt = excerpt.toLowerCase().includes(normalizedSearch);
+        const inTags = tags.some((t) =>
+          (t || "").toLowerCase().includes(normalizedSearch)
+        );
         return inTitle || inExcerpt || inTags;
       });
+
+  if (loading) {
+    return (
+      <section className="col-span-12 py-8 text-center text-muted-foreground">
+        Loading blogs...
+      </section>
+    );
+  }
 
   return (
     <section className="col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-8">
@@ -167,8 +182,8 @@ const BlogGrid = ({ activeCategory, searchText }) => {
               layoutId={`blog-image-${blog.slug}`}
               className="w-full aspect-[16/9] bg-gradient-to-br from-muted/20 to-muted/40 group-hover:scale-105 transition-transform duration-700 rounded-t-2xl overflow-hidden"
             >
-              <img 
-                src={blog.image} 
+              <img
+                src={blog.image}
                 alt={blog.title}
                 className="w-full h-full object-cover"
               />
@@ -188,7 +203,7 @@ const BlogGrid = ({ activeCategory, searchText }) => {
                   ))}
                 </div>
               )}
-              <motion.h3 
+              <motion.h3
                 layoutId={`blog-title-${blog.slug}`}
                 className="text-h3 font-bold leading-tight text-foreground group-hover:text-primary transition-colors"
               >
@@ -205,7 +220,9 @@ const BlogGrid = ({ activeCategory, searchText }) => {
                   </div>
                   {blog.author}
                 </div>
-                <span>{blog.views.toLocaleString()} views</span>
+                {typeof blog.views === "number" && (
+                  <span>{blog.views.toLocaleString()} views</span>
+                )}
               </div>
             </div>
           </GlassCard>
@@ -287,6 +304,8 @@ export default function Landing() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [blogs, setBlogs] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   const categories = ["All", "Design", "Development", "AI", "Business", "Lifestyle"];
 
@@ -295,6 +314,38 @@ export default function Landing() {
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
   };
+
+  useEffect(() => {
+    const loadBlogs = async () => {
+      try {
+        const result = await postService.list({ limit: 30 });
+        const items = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
+
+        const mapped = items.map((post) => ({
+          slug: post.slug,
+          title: post.title,
+          excerpt: post.seo?.metaDescription || "",
+          image: post.headerImage,
+          tags: Array.isArray(post.tags)
+            ? post.tags
+            : Array.isArray(post.tagIds)
+            ? post.tagIds.map((t) => t.name || t)
+            : [],
+          author: post.authorId?.name || "Unknown",
+          views: post.cachedStats?.viewCount ?? 0,
+        }));
+
+        setBlogs(mapped);
+      } catch (error) {
+        console.error("Failed to load blogs for landing:", error);
+        setBlogs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBlogs();
+  }, []);
 
   return (
     <div className="grid grid-cols-12 gap-y-16 gap-x-6 pb-20">
@@ -320,6 +371,8 @@ export default function Landing() {
       <BlogGrid 
         activeCategory={activeCategory} 
         searchText={searchText}
+        blogs={blogs}
+        loading={loading}
       />
       
       <Newsletter />

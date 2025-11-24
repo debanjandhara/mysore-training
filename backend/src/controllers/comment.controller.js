@@ -55,9 +55,18 @@ const updateStatus = async (req, res, next) => {
 
 const getByPost = async (req, res, next) => {
   try {
+    console.log('[comment.controller.getByPost] Incoming request:', {
+      path: req.path,
+      method: req.method,
+      postId: req.params.postId,
+      query: req.query,
+      user: req.user ? { id: req.user._id?.toString?.() || req.user.id, role: req.user.role } : null,
+    });
+
     const result = await commentService.getPostComments(req.params.postId, req.query);
     res.json(result);
   } catch (error) {
+    console.error('[comment.controller.getByPost] Error:', error);
     next(error);
   }
 };
@@ -103,9 +112,19 @@ const getVotes = async (req, res, next) => {
   }
 };
 
+const list = async (req, res, next) => {
+  try {
+    const result = await commentService.listComments(req.query);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   create,
   getById,
+  list,
   update,
   remove,
   updateStatus,
