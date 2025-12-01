@@ -118,7 +118,7 @@ const updateScore = (id, score) => {
  * @returns {Promise<Array>}
  */
 const findReplies = (parentId, options) => {
-  return Comment.find({ parentId, status: 'approved' })
+  return Comment.find({ parentId, status: { $in: ['approved', 'deleted'] } })
     .sort(options.sort)
     .skip(options.skip)
     .limit(options.limit)

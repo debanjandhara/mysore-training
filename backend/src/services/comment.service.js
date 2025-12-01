@@ -9,6 +9,14 @@ const throwError = (message, code, status = 400) => {
   throw error;
 };
 
+// Helper: Mask deleted comment content
+const sanitizeDeletedComment = (comment) => {
+  if (comment && comment.status === 'deleted') {
+    comment.content = '[deleted_message]';
+  }
+  return comment;
+};
+
 /**
  * Create a new comment
  * @param {Object} data 
@@ -63,14 +71,19 @@ const getCommentById = async (id, includeChildren = false) => {
   let comment = await commentRepository.findById(id);
   if (!comment) throwError('Comment not found', 'COMMENT_NOT_FOUND', 404);
 
+  // Convert to object to allow modification
+  comment = comment.toObject();
+
   if (includeChildren) {
     // Basic one-level fetch for "includeChildren"
-    const children = await commentRepository.findReplies(id, { sort: { createdAt: 1 }, limit: 50 });
-    comment = comment.toObject();
+    let children = await commentRepository.findReplies(id, { sort: { createdAt: 1 }, limit: 50 });
+    // Sanitize children
+    children = children.map(c => sanitizeDeletedComment(c.toObject ? c.toObject() : c));
+    
     comment.replies = children;
   }
 
-  return comment;
+  return sanitizeDeletedComment(comment);
 };
 
 /**
@@ -152,10 +165,10 @@ const getPostComments = async (postId, query) => {
   
   // DEEP NESTING LOGIC (Revamped)
   if (includeReplies === 'inline' || includeReplies === 'true') {
-    // 1. Fetch ALL approved comments for this post (up to a safety limit)
+    // 1. Fetch ALL approved AND deleted comments for this post (up to a safety limit)
     // We need all of them to reconstruct the tree correctly.
     const allComments = await commentRepository.findMany(
-      { postId, status: 'approved' }, 
+      { postId, status: { $in: ['approved', 'deleted'] } }, 
       { sort: { createdAt: 1 }, limit: 2000 }
     );
 
@@ -164,7 +177,7 @@ const getPostComments = async (postId, query) => {
     const roots = [];
 
     allComments.forEach(doc => {
-      const comment = doc.toObject();
+      const comment = sanitizeDeletedComment(doc.toObject());
       comment.replies = []; // Initialize replies array
       commentMap[comment._id.toString()] = comment;
     });
@@ -177,7 +190,7 @@ const getPostComments = async (postId, query) => {
         if (commentMap[parentIdStr]) {
           commentMap[parentIdStr].replies.push(comment);
         } else {
-          // Parent might be deleted or not approved; handle orphans if needed
+          // Parent might be rejected or fully missing; handle orphans if needed
           // For now, strictly ignore or push to roots if you want to preserve content
         }
       } else {
@@ -207,7 +220,7 @@ const getPostComments = async (postId, query) => {
   }
 
   // FLAT LIST LOGIC (Default / Pagination)
-  const filter = { postId, parentId: null, status: 'approved' };
+  const filter = { postId, parentId: null, status: { $in: ['approved', 'deleted'] } };
   
   let sortOption = { createdAt: -1 }; // new
   if (sort === 'old') sortOption = { createdAt: 1 };
@@ -218,7 +231,9 @@ const getPostComments = async (postId, query) => {
   const comments = await commentRepository.findMany(filter, { sort: sortOption, skip, limit: parseInt(limit) });
   const total = await commentRepository.count(filter);
 
-  return { data: comments, total, page, limit };
+  const sanitizedComments = comments.map(c => sanitizeDeletedComment(c.toObject()));
+
+  return { data: sanitizedComments, total, page, limit };
 };
 
 /**
@@ -232,9 +247,11 @@ const getReplies = async (commentId, query) => {
   const skip = (page - 1) * limit;
 
   const replies = await commentRepository.findReplies(commentId, { sort: { createdAt: 1 }, skip, limit: parseInt(limit) });
-  const total = await commentRepository.count({ parentId: commentId, status: 'approved' });
+  const total = await commentRepository.count({ parentId: commentId, status: { $in: ['approved', 'deleted'] } });
 
-  return { data: replies, total, page, limit };
+  const sanitizedReplies = replies.map(c => sanitizeDeletedComment(c.toObject()));
+
+  return { data: sanitizedReplies, total, page, limit };
 };
 
 /**
@@ -251,7 +268,7 @@ const getCommentTree = async (postId, options) => {
   const { maxDepth = 5, maxNodes = 1000, prune = false } = options;
   
   const filter = { postId };
-  if (prune === 'true') filter.status = 'approved';
+  if (prune === 'true') filter.status = { $in: ['approved', 'deleted'] };
 
   const allComments = await commentRepository.findMany(filter, { sort: { createdAt: 1 }, limit: parseInt(maxNodes) });
 
@@ -259,10 +276,13 @@ const getCommentTree = async (postId, options) => {
     if (depth > maxDepth) return [];
     return allComments
       .filter(c => (c.parentId || null) == (parentId || null)) // Loose match for null/undefined
-      .map(c => ({
-        ...c.toObject(),
-        replies: buildTree(c._id, depth + 1)
-      }));
+      .map(c => {
+        const sanitized = sanitizeDeletedComment(c.toObject());
+        return {
+          ...sanitized,
+          replies: buildTree(c._id, depth + 1)
+        };
+      });
   };
 
   return buildTree(null, 1);
