@@ -17,7 +17,7 @@ const create = (data) => {
 const findById = (id) => {
   return Comment.findById(id)
     .populate('userId', 'name username profileImage')
-    .populate('postId', 'title slug');
+    .populate('postId', 'title slug authorId');
 };
 
 /**

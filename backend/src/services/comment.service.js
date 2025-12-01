@@ -20,6 +20,15 @@ const createComment = async (data, userId) => {
   const post = await postRepository.findPostById(data.postId);
   if (!post) throwError('Post not found', 'POST_NOT_FOUND', 404);
 
+  const isPostAuthor = post.authorId._id
+    ? post.authorId._id.toString() === userId.toString()
+    : post.authorId.toString() === userId.toString();
+
+  // Prevent post author from creating a new top-level comment on their own post
+  if (!data.parentId && isPostAuthor) {
+    throwError('Authors cannot start new top-level comments on their own posts', 'AUTHOR_TOPLEVEL_FORBIDDEN', 403);
+  }
+
   // Validate parent if provided
   if (data.parentId) {
     const parent = await commentRepository.findById(data.parentId);
@@ -30,6 +39,11 @@ const createComment = async (data, userId) => {
     ...data,
     userId
   };
+
+  // If the post author is replying (has a parentId), auto-approve the reply
+  if (isPostAuthor && commentData.parentId) {
+    commentData.status = 'approved';
+  }
 
   const comment = await commentRepository.create(commentData);
   
@@ -92,7 +106,12 @@ const deleteComment = async (id, userId, isAdmin) => {
   const comment = await commentRepository.findById(id);
   if (!comment) throwError('Comment not found', 'COMMENT_NOT_FOUND', 404);
 
-  if (comment.userId._id.toString() !== userId && !isAdmin) {
+  const isCommentAuthor = comment.userId?._id?.toString() === userId;
+  const isPostAuthor = comment.postId?.authorId
+    ? comment.postId.authorId.toString() === userId
+    : false;
+
+  if (!isCommentAuthor && !isPostAuthor && !isAdmin) {
     throwError('Unauthorized', 'FORBIDDEN', 403);
   }
 

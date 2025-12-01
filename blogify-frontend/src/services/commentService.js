@@ -25,9 +25,9 @@ export const commentService = {
     return json;
   },
 
-  // Get Comment Tree (Nested)
+  // Get Comment Tree (Nested) - only approved comments (prune=true)
   getTree: async (postId) => {
-    const url = `${API_BASE_URL}/api/comments/tree?postId=${postId}&maxDepth=10&maxNodes=1000`;
+    const url = `${API_BASE_URL}/api/comments/tree?postId=${postId}&maxDepth=10&maxNodes=1000&prune=true`;
     const response = await fetchWithAuth(url);
     return response;
   },

@@ -17,6 +17,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { postService } from "../services/postService";
 import { categoryService } from "../services/categoryService";
+import { API_BASE_URL, fetchWithAuth } from "../services/authService";
 
 // UI Components
 import { Button } from "../components/ui/Button";
@@ -99,7 +100,14 @@ const Hero = memo(({ theme, onStart }) => (
   </section>
 ));
 
-const SearchSection = ({ search, setSearch, onFilter }) => (
+const SearchSection = ({
+  search,
+  setSearch,
+  onFilter,
+  onSearch,
+  suggestions = [],
+  onSuggestionSelect,
+}) => (
   <section className="sticky top-0 z-50 w-full border-b border-white/5 bg-background/80 py-4 backdrop-blur-xl transition-all duration-300 supports-[backdrop-filter]:bg-background/60">
     <div className="mx-auto flex max-w-4xl items-center gap-3 px-4">
       <div className="group relative flex-1">
@@ -109,10 +117,39 @@ const SearchSection = ({ search, setSearch, onFilter }) => (
           placeholder="Search for blog..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && onSearch) {
+              e.preventDefault();
+              onSearch();
+            }
+          }}
           className="h-12 w-full rounded-full border border-input bg-background/50 pl-12 pr-4 outline-none transition-all focus:ring-2 focus:ring-primary/50 hover:bg-background/80"
         />
+
+        {suggestions.length > 0 && (
+          <div className="absolute left-0 right-0 top-full z-40 mt-1 rounded-xl border border-input bg-background/95 shadow-lg">
+            {suggestions.map((term) => (
+              <button
+                key={term}
+                type="button"
+                onClick={() => onSuggestionSelect && onSuggestionSelect(term)}
+                className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                <span className="truncate">{term}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <Button className="hidden h-12 rounded-full px-8 md:block">Search</Button>
+
+      <Button
+        className="hidden h-12 rounded-full px-8 md:block"
+        type="button"
+        onClick={onSearch}
+      >
+        Search
+      </Button>
+
       <button
         onClick={onFilter}
         className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-input bg-background/50 transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -467,7 +504,7 @@ const FilterModal = ({ isOpen, onClose, sort, setSort, count, setCount }) => {
     return (
       <div className="fixed inset-0 z-[60] flex animate-in fade-in items-center justify-center bg-black/60 backdrop-blur-sm p-4">
         <GlassCard className="relative w-full max-w-sm space-y-6 !bg-background border-border p-6 shadow-2xl">
-          <button onClick={onClose} className="absolute right-4 top-4 text-foreground/50 hover:text-foreground">✕</button>
+          <button onClick={() => onClose()} className="absolute right-4 top-4 text-foreground/50 hover:text-foreground">✕</button>
           <h3 className="text-xl font-bold">Filter & Sort</h3>
           
           <div className="space-y-2">
@@ -502,7 +539,7 @@ const FilterModal = ({ isOpen, onClose, sort, setSort, count, setCount }) => {
             </div>
           </div>
 
-          <Button onClick={onClose} className="w-full h-12 text-base">Apply Filters</Button>
+          <Button onClick={() => onClose()} className="w-full h-12 text-base">Apply Filters</Button>
         </GlassCard>
       </div>
     );
@@ -512,7 +549,7 @@ const FilterModal = ({ isOpen, onClose, sort, setSort, count, setCount }) => {
 
 export default function Landing() {
   const { currentTheme } = useTheme();
-  const { isAuthenticated } = useAuth(); 
+  const { isAuthenticated, token } = useAuth(); 
   const navigate = useNavigate();
 
   // State
@@ -525,6 +562,7 @@ export default function Landing() {
   // Modals
   const [isFilterOpen, setFilterOpen] = useState(false);
   const [isSubscribeOpen, setSubscribeOpen] = useState(false);
+  const [savedSearches, setSavedSearches] = useState([]);
   
   // Pagination & Sort
   const [postCount, setPostCount] = useState(6);
@@ -541,6 +579,7 @@ export default function Landing() {
 
   useEffect(() => {
     setLoading(true);
+
     const params = { limit: 100 }; 
     postService.list(params).then((res) => {
       const allBlogs = Array.isArray(res.data) ? res.data : [];
@@ -550,7 +589,14 @@ export default function Landing() {
         title: post.title,
         excerpt: post.seo?.metaDescription || "",
         headerImage: post.headerImage,
-        tags: Array.isArray(post.tags) ? post.tags : post.tagIds?.map((t) => t.name || t) || [],
+        // Tags from tagIds
+        tags: Array.isArray(post.tags)
+          ? post.tags
+          : post.tagIds?.map((t) => t.name || t) || [],
+        // Categories from categoryIds for category-wise filtering
+        categories: Array.isArray(post.categoryIds)
+          ? post.categoryIds.map((c) => c.name || c)
+          : [],
         author: { name: post.authorId?.name || "Unknown" },
         createdAt: post.createdAt,
         cachedStats: post.cachedStats,
@@ -559,16 +605,39 @@ export default function Landing() {
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
+  // Load saved searches for logged-in users
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+
+    fetchWithAuth(`${API_BASE_URL}/api/users/me/saved-searches`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((data) => {
+        const items = Array.isArray(data) ? data : [];
+        setSavedSearches(items);
+      })
+      .catch((err) => {
+        console.error("Failed to load saved searches:", err);
+      });
+  }, [isAuthenticated, token]);
+
   useEffect(() => { setCurrentPage(1); }, [search, activeCategory, postCount]);
 
   const filteredBlogs = useMemo(() => {
     let result = blogs;
     if (search) {
       const lower = search.toLowerCase();
-      result = result.filter((b) => b.title?.toLowerCase().includes(lower) || b.tags?.some((t) => t.toLowerCase().includes(lower)));
+      result = result.filter((b) =>
+        b.title?.toLowerCase().includes(lower) ||
+        b.tags?.some((t) => t.toLowerCase().includes(lower))
+      );
     }
     if (activeCategory !== "All") {
-      result = result.filter((b) => b.tags?.includes(activeCategory));
+      result = result.filter((b) => b.categories?.includes(activeCategory));
     }
     return [...result].sort((a, b) => {
       if (sortBy === "popular") return (b.cachedStats?.viewCount || 0) - (a.cachedStats?.viewCount || 0);
@@ -600,6 +669,51 @@ export default function Landing() {
     }
   };
 
+  // Suggestions from saved searches
+  const suggestionTerms = useMemo(() => {
+    const terms = savedSearches
+      .map((s) => s.query)
+      .filter(Boolean);
+    // Deduplicate while preserving order
+    return Array.from(new Set(terms));
+  }, [savedSearches]);
+
+  const filteredSuggestions = useMemo(() => {
+    if (!search) return [];
+    const lower = search.toLowerCase();
+    // Chrome-like behavior: only suggestions whose beginning matches the typed text
+    return suggestionTerms
+      .filter((t) => t.toLowerCase().startsWith(lower))
+      .slice(0, 5);
+  }, [suggestionTerms, search]);
+
+  const handleSearchSubmit = async (overrideTerm) => {
+    const term = (overrideTerm ?? search).trim();
+    if (!term) return;
+
+    // Local filtering already reacts to `search` state; this only saves history for logged-in users
+    if (!isAuthenticated || !token) return;
+
+    try {
+      await fetchWithAuth(`${API_BASE_URL}/api/users/me/saved-searches`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: term,
+          filters: {
+            category: activeCategory,
+            sortBy,
+          },
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to save search:", err);
+    }
+  };
+
   if (isAuthenticated) {
     // --- AUTHENTICATED VIEW (No Hero) ---
     return (
@@ -607,8 +721,15 @@ export default function Landing() {
         <SearchSection 
           search={search} 
           setSearch={setSearch} 
-          onFilter={() => setFilterOpen(true)} 
+          onFilter={() => setFilterOpen(true)}
+          onSearch={() => handleSearchSubmit()}
+          suggestions={filteredSuggestions}
+          onSuggestionSelect={(term) => {
+            setSearch(term);
+            handleSearchSubmit(term);
+          }}
         />
+
         <CategorySelector 
           categories={categories} 
           active={activeCategory} 
@@ -640,7 +761,8 @@ export default function Landing() {
         <SearchSection 
           search={search} 
           setSearch={setSearch} 
-          onFilter={() => setFilterOpen(true)} 
+          onFilter={() => setFilterOpen(true)}
+          onSearch={handleSearchSubmit}
         />
         
         <CategorySelector 
