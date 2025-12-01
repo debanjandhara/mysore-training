@@ -1,17 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/post.controller');
-const { authenticateJwt } = require('../middleware/auth');
+const { authenticateJwt, authenticateOptional } = require('../middleware/auth');
 
 // Public Routes
-router.get('/', postController.list);
+router.get('/', authenticateOptional, postController.list);
 router.get('/search', postController.search);
 router.get('/slug/:slug', postController.getBySlug);
 router.get('/:id', postController.getById);
+// View stat now supports auth but is public access
 router.post('/:id/stat/view', postController.viewStat);
 
 // Protected Routes (auth only, no role restriction)
 router.use(authenticateJwt);
+router.post('/:id/like', postController.likePost);
 // router.use(requireRole(['blogger', 'admin']));
 
 // CRUD

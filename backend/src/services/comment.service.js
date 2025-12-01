@@ -131,7 +131,63 @@ const updateStatus = async (id, status, moderatorId) => {
 const getPostComments = async (postId, query) => {
   const { page = 1, limit = 20, sort = 'new', includeReplies = 'false' } = query;
   
-  // Filter: Top level comments only by default for listing
+  // DEEP NESTING LOGIC (Revamped)
+  if (includeReplies === 'inline' || includeReplies === 'true') {
+    // 1. Fetch ALL approved comments for this post (up to a safety limit)
+    // We need all of them to reconstruct the tree correctly.
+    const allComments = await commentRepository.findMany(
+      { postId, status: 'approved' }, 
+      { sort: { createdAt: 1 }, limit: 2000 }
+    );
+
+    // 2. Convert to Objects and Create Map
+    const commentMap = {};
+    const roots = [];
+
+    allComments.forEach(doc => {
+      const comment = doc.toObject();
+      comment.replies = []; // Initialize replies array
+      commentMap[comment._id.toString()] = comment;
+    });
+
+    // 3. Build Tree by linking children to parents
+    allComments.forEach(doc => {
+      const comment = commentMap[doc._id.toString()];
+      if (doc.parentId) {
+        const parentIdStr = doc.parentId.toString();
+        if (commentMap[parentIdStr]) {
+          commentMap[parentIdStr].replies.push(comment);
+        } else {
+          // Parent might be deleted or not approved; handle orphans if needed
+          // For now, strictly ignore or push to roots if you want to preserve content
+        }
+      } else {
+        roots.push(comment);
+      }
+    });
+
+    // 4. Sort Roots (and optionally replies if needed)
+    if (sort === 'new') {
+      roots.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    } else if (sort === 'score') {
+      roots.sort((a, b) => (b.votes?.score || 0) - (a.votes?.score || 0));
+    }
+    // (Replies are already roughly sorted by createdAt due to the initial fetch sort, 
+    // but you could sort them recursively if strictly needed)
+
+    // 5. Log nested structure as requested
+    // console.log('[getPostComments] Nested Tree Structure:', JSON.stringify(roots, null, 2));
+
+    // Return in the expected format
+    return { 
+      data: roots, 
+      total: roots.length, 
+      page: 1, 
+      limit: roots.length 
+    };
+  }
+
+  // FLAT LIST LOGIC (Default / Pagination)
   const filter = { postId, parentId: null, status: 'approved' };
   
   let sortOption = { createdAt: -1 }; // new
@@ -142,20 +198,6 @@ const getPostComments = async (postId, query) => {
 
   const comments = await commentRepository.findMany(filter, { sort: sortOption, skip, limit: parseInt(limit) });
   const total = await commentRepository.count(filter);
-
-  // If inline replies requested (simple 1-level nesting for demo)
-  if (includeReplies === 'inline') {
-    // Populate replies for each comment
-    // Note: In production with deep trees, use aggregation or client-side recursive loading
-    const results = [];
-    for (let c of comments) {
-      const replies = await commentRepository.findReplies(c._id, { sort: { createdAt: 1 }, limit: 5 });
-      const cObj = c.toObject();
-      cObj.replies = replies;
-      results.push(cObj);
-    }
-    return { data: results, total, page, limit };
-  }
 
   return { data: comments, total, page, limit };
 };
@@ -200,7 +242,7 @@ const getCommentTree = async (postId, options) => {
       .filter(c => (c.parentId || null) == (parentId || null)) // Loose match for null/undefined
       .map(c => ({
         ...c.toObject(),
-        children: buildTree(c._id, depth + 1)
+        replies: buildTree(c._id, depth + 1)
       }));
   };
 
@@ -272,10 +314,23 @@ const getVotes = async (id, userId) => {
  * @returns {Promise<Object>}
  */
 const listComments = async (query) => {
-  const { page = 1, limit = 20, sort = 'new', status } = query;
+  const { page = 1, limit = 20, sort = 'new', status, postAuthorId } = query;
   
   const filter = {};
   if (status && status !== 'All') filter.status = status;
+
+  if (postAuthorId) {
+    // Find posts by this author to filter comments on them
+    // Use a large limit to ensure we get all posts for the user
+    const authorPosts = await postRepository.findPosts({ authorId: postAuthorId }, { limit: 10000, sort: { _id: 1 } });
+    const postIds = authorPosts.map(p => p._id);
+    
+    if (postIds.length === 0) {
+      return { data: [], total: 0, page, limit };
+    }
+    
+    filter.postId = { $in: postIds };
+  }
   
   let sortOption = { createdAt: -1 };
   if (sort === 'old') sortOption = { createdAt: 1 };

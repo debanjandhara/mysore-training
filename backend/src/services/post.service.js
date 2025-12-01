@@ -283,9 +283,32 @@ const updateTaxonomy = async (id, data, userId) => {
 /**
  * Increment View Count
  * @param {string} id 
+ * @param {string} userId (optional)
  */
-const incrementView = async (id) => {
-  await postRepository.incrementStats(id, 'viewCount', 1);
+const incrementView = async (id, userId = null) => {
+  if (userId) {
+    const post = await postRepository.addViewer(id, userId);
+    // Sync viewCount with array length
+    if (post) {
+      await postRepository.updatePost(id, { 'cachedStats.viewCount': post.viewedBy.length });
+    }
+  } else {
+    // Fallback for guests: just increment number
+    await postRepository.incrementStats(id, 'viewCount', 1);
+  }
+};
+
+const toggleLike = async (id, userId) => {
+  const post = await postRepository.findPostById(id);
+  if (!post) throwError('Post not found', 'POST_NOT_FOUND', 404);
+
+  const isLiked = post.likes && post.likes.some(uid => uid.toString() === userId);
+  
+  if (isLiked) {
+    return postRepository.removeLike(id, userId);
+  } else {
+    return postRepository.addLike(id, userId);
+  }
 };
 
 /**
@@ -314,5 +337,6 @@ module.exports = {
   getSeoPreview,
   updateTaxonomy,
   incrementView,
+  toggleLike,
   searchPosts
 };

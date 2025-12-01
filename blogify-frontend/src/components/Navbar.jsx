@@ -24,18 +24,24 @@ function NavLink({ to, label }) {
 export default function Navbar() {
   const { currentTheme } = useTheme();
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const isDashboard = location.pathname.startsWith("/dashboard");
   
   return (
-    <header className="sticky top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl transition-all duration-500">
-      <div className="max-w-[1200px] mx-auto flex items-center justify-between px-6 py-4 md:px-8">
-        <Link to="/" className="flex items-center gap-3">
-          <div 
-            className="w-8 h-8 rounded-xl shadow-lg shadow-primary/20 bg-gradient-to-br from-primary to-secondary"
-          />
-          <span className="text-h3 font-bold tracking-tight text-foreground">
-            Blogify
-          </span>
-        </Link>
+    <header className={`sticky top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl transition-all duration-500 ${isDashboard ? "w-full border-border" : ""}`}>
+      <div className={`flex items-center justify-between px-6 py-4 md:px-8 ${isDashboard ? "w-full" : "max-w-[1200px] mx-auto"}`}>
+        {!isDashboard ? (
+          <Link to="/" className="flex items-center gap-3">
+            <div 
+              className="w-8 h-8 rounded-xl shadow-lg shadow-primary/20 bg-gradient-to-br from-primary to-secondary"
+            />
+            <span className="text-h3 font-bold tracking-tight text-foreground">
+              Blogify
+            </span>
+          </Link>
+        ) : (
+          <div /> /* Spacer */
+        )}
         <nav className="flex gap-2">
           <NavLink to="/" label="Home" />
           {isAuthenticated && (

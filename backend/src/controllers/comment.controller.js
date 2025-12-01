@@ -114,7 +114,14 @@ const getVotes = async (req, res, next) => {
 
 const list = async (req, res, next) => {
   try {
-    const result = await commentService.listComments(req.query);
+    const params = { ...req.query };
+    
+    // Dashboard specific: Filter comments related to logged in user posts
+    if (req.query.dashboard === 'true' && req.user && req.user.role !== 'admin') {
+      params.postAuthorId = req.user._id.toString();
+    }
+
+    const result = await commentService.listComments(params);
     res.json(result);
   } catch (error) {
     next(error);

@@ -25,6 +25,13 @@ export const commentService = {
     return json;
   },
 
+  // Get Comment Tree (Nested)
+  getTree: async (postId) => {
+    const url = `${API_BASE_URL}/api/comments/tree?postId=${postId}&maxDepth=10&maxNodes=1000`;
+    const response = await fetchWithAuth(url);
+    return response;
+  },
+
   // Public: Create a comment (Authenticated)
   create: async (data) => {
     const response = await fetchWithAuth(`${API_BASE_URL}/api/comments`, {
@@ -65,9 +72,13 @@ export const commentService = {
   },
   
   // Admin: List all comments
-  list: async (params = {}) => {
+  list: async (params = {}, accessToken = null) => {
     const query = new URLSearchParams(params).toString();
-    const data = await fetchWithAuth(`${API_BASE_URL}/api/comments?${query}`);
+    const options = {};
+    if (accessToken) {
+      options.headers = { Authorization: `Bearer ${accessToken}` };
+    }
+    const data = await fetchWithAuth(`${API_BASE_URL}/api/comments?${query}`, options);
     console.log('[commentService.list] response data:', data);
     return data;
   },

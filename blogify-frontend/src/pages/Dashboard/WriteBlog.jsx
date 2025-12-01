@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -8,7 +8,7 @@ import { Node } from '@tiptap/core';
 import { 
   Bold, Italic, List, ListOrdered, Quote, Undo, Redo, Save, 
   CalendarDays, Image as ImageIcon, Video as VideoIcon, 
-  Music, Heading1, Heading2, Loader2, X, Code, Eye, PenTool 
+  Music, Heading1, Heading2, Loader2, X, Code, Eye, PenTool, Plus 
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -58,10 +58,11 @@ const AudioNode = Node.create({
 });
 
 /* -------------------------------------------------------------------------- */
-/*                                 Components                                 */
+/*                            Sub-Components                                  */
 /* -------------------------------------------------------------------------- */
 
-const EditorToolbar = ({ editor, onAddMedia }) => {
+// Memoized toolbar to prevent unnecessary renders, though Tiptap state updates will still trigger it
+const EditorToolbar = React.memo(({ editor, onAddMedia }) => {
   if (!editor) return null;
 
   const handleMediaClick = (type) => {
@@ -79,6 +80,7 @@ const EditorToolbar = ({ editor, onAddMedia }) => {
     <button
       onClick={onClick}
       disabled={disabled}
+      type="button"
       className={cn(
         "p-2 rounded-md transition-all duration-200 flex items-center justify-center",
         isActive 
@@ -92,48 +94,20 @@ const EditorToolbar = ({ editor, onAddMedia }) => {
   );
 
   return (
-    <div className="flex flex-wrap gap-1 p-2 border-b border-border bg-muted/30">
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().toggleBold().run()} 
-        isActive={editor.isActive('bold')} 
-        icon={Bold} 
-      />
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().toggleItalic().run()} 
-        isActive={editor.isActive('italic')} 
-        icon={Italic} 
-      />
+    <div className="flex flex-wrap gap-1 p-2 border-b border-border bg-muted/30 sticky top-0 z-10">
+      <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} icon={Bold} />
+      <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} icon={Italic} />
       
       <div className="w-px h-6 bg-border mx-1 self-center" />
       
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} 
-        isActive={editor.isActive('heading', { level: 1 })} 
-        icon={Heading1} 
-      />
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} 
-        isActive={editor.isActive('heading', { level: 2 })} 
-        icon={Heading2} 
-      />
+      <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} isActive={editor.isActive('heading', { level: 1 })} icon={Heading1} />
+      <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive('heading', { level: 2 })} icon={Heading2} />
       
       <div className="w-px h-6 bg-border mx-1 self-center" />
       
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().toggleBulletList().run()} 
-        isActive={editor.isActive('bulletList')} 
-        icon={List} 
-      />
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().toggleOrderedList().run()} 
-        isActive={editor.isActive('orderedList')} 
-        icon={ListOrdered} 
-      />
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().toggleBlockquote().run()} 
-        isActive={editor.isActive('blockquote')} 
-        icon={Quote} 
-      />
+      <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} icon={List} />
+      <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} icon={ListOrdered} />
+      <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} icon={Quote} />
       
       <div className="w-px h-6 bg-border mx-1 self-center" />
       
@@ -143,76 +117,47 @@ const EditorToolbar = ({ editor, onAddMedia }) => {
       
       <div className="w-px h-6 bg-border mx-1 self-center" />
       
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().undo().run()} 
-        disabled={!editor.can().undo()} 
-        icon={Undo} 
-      />
-      <ToolbarButton 
-        onClick={() => editor.chain().focus().redo().run()} 
-        disabled={!editor.can().redo()} 
-        icon={Redo} 
-      />
+      <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} icon={Undo} />
+      <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} icon={Redo} />
     </div>
   );
-};
+});
+
+/* -------------------------------------------------------------------------- */
+/*                               Main Component                               */
+/* -------------------------------------------------------------------------- */
 
 export default function WriteBlog() {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const editBlogId = location.state?.blogId;
 
   // Form State
   const [title, setTitle] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]); // Changed to Array
   const [tags, setTags] = useState([]);
   const [tagInputValue, setTagInputValue] = useState('');
   const [heroImageFile, setHeroImageFile] = useState(null);
+  const [existingHeroImageUrl, setExistingHeroImageUrl] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [isScheduleEnabled, setIsScheduleEnabled] = useState(false);
   
   // UI State
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editorMode, setEditorMode] = useState('write'); // 'write' | 'raw' | 'preview'
+  const [editorMode, setEditorMode] = useState('write'); 
   const [rawHtmlCode, setRawHtmlCode] = useState('');
 
   // Data State
   const [categories, setCategories] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
 
-  useEffect(() => {
-    const loadMetadata = async () => {
-      try {
-        const [cats, tagList] = await Promise.all([
-          categoryService.getSelectList(),
-          tagService.getSelectList()
-        ]);
-        setCategories(cats);
-        if (cats.length > 0) setCategoryId(cats[0]._id);
-        setAvailableTags(tagList);
-      } catch (error) {
-        console.error("Error loading metadata:", error);
-      }
-    };
-    loadMetadata();
+  // Calculate min date for validation (Current time formatted for datetime-local)
+  const minDate = useMemo(() => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
   }, []);
-
-  const handleAddMedia = async (file, type) => {
-    try {
-      const result = await postService.uploadMedia(file, token);
-      let url = result.data.url;
-      if (url && url.startsWith('/')) url = `${API_BASE_URL}${url}`;
-
-      if (type === 'image') {
-        editor.chain().focus().setImage({ src: url }).run();
-      } else if (type === 'video') {
-        editor.chain().focus().insertContent(`<video src="${url}" controls></video>`).run();
-      } else if (type === 'audio') {
-        editor.chain().focus().insertContent(`<audio src="${url}" controls></audio>`).run();
-      }
-    } catch (error) {
-      alert('Media upload failed: ' + error.message);
-    }
-  };
 
   const editor = useEditor({
     extensions: [
@@ -228,37 +173,106 @@ export default function WriteBlog() {
     ],
     editorProps: {
       attributes: {
-        // Added specific prose classes to fix bullet/heading visibility
+        // Enforce theme text color on ALL elements to prevent gray text
         class: cn(
-        "prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none min-h-[400px] p-6 max-w-none",
-        "text-foreground",
-        "prose-headings:text-foreground prose-headings:font-bold",
-        "prose-h1:text-3xl prose-h2:text-2xl",
-        "prose-p:text-muted-foreground",
-        "prose-strong:text-foreground",
-        "prose-blockquote:text-muted-foreground prose-blockquote:border-l-primary",
-        "prose-code:text-primary prose-code:bg-muted/50 prose-code:rounded prose-code:px-1",
-        "prose-ul:list-disc prose-ul:pl-6 prose-ul:text-muted-foreground",
-        "prose-ol:list-decimal prose-ol:pl-6 prose-ol:text-muted-foreground",
-        "prose-li:marker:text-primary",
-        "prose-img:my-4"
-      ),
+          "prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none min-h-[400px] p-6 max-w-none",
+          "text-foreground", // Global text color
+          "prose-headings:text-foreground prose-headings:font-bold",
+          "prose-p:text-foreground",
+          "prose-strong:text-foreground",
+          "prose-blockquote:text-foreground prose-blockquote:border-l-primary",
+          "prose-ul:text-foreground prose-ul:list-disc prose-ul:pl-6",
+          "prose-ol:text-foreground prose-ol:list-decimal prose-ol:pl-6",
+          "prose-li:text-foreground prose-li:marker:text-primary",
+          "prose-code:text-primary prose-code:bg-muted/50 prose-code:rounded prose-code:px-1",
+          "prose-img:my-4"
+        ),
       },
     },
     onUpdate: ({ editor }) => {
+      // Defer this slightly if needed, but usually fine
       setRawHtmlCode(editor.getHTML());
     }
   });
 
-  const handleModeChange = (mode) => {
-    if (mode === 'write' && editorMode === 'raw') {
-      // Sync changes from Raw view back to Editor
-      editor?.commands.setContent(rawHtmlCode);
-    } else if (mode === 'raw') {
-      // Sync changes from Editor to Raw view
-      setRawHtmlCode(editor?.getHTML() || '');
+  // Load Data
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const [cats, tagList] = await Promise.all([
+          categoryService.getSelectList(),
+          tagService.getSelectList()
+        ]);
+        setCategories(cats);
+        setAvailableTags(tagList);
+
+        if (editBlogId) {
+          const post = await postService.getById(editBlogId);
+          setTitle(post.title);
+          
+          // Handle Multiple Categories
+          if (post.categoryIds && post.categoryIds.length > 0) {
+            const ids = post.categoryIds.map(c => typeof c === 'object' ? c._id : c);
+            setSelectedCategoryIds(ids);
+          }
+
+          if (post.tagIds && post.tagIds.length > 0) {
+             const tagNames = post.tagIds.map(t => typeof t === 'object' ? t.name : t);
+             setTags(tagNames);
+          }
+
+          if (post.headerImage) setExistingHeroImageUrl(post.headerImage);
+          
+          if (post.publishedAt) {
+             const date = new Date(post.publishedAt);
+             const localIso = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+             setScheduledAt(localIso);
+             setIsScheduleEnabled(true);
+          }
+          
+          if (editor) {
+            editor.commands.setContent(post.content);
+            setRawHtmlCode(post.content);
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing WriteBlog:", error);
+      }
+    };
+
+    init();
+  }, [editBlogId, editor]);
+
+  const handleAddMedia = async (file, type) => {
+    try {
+      const result = await postService.uploadMedia(file, token);
+      let url = result.data.url;
+      if (url && url.startsWith('/')) url = `${API_BASE_URL}${url}`;
+
+      if (type === 'image') editor.chain().focus().setImage({ src: url }).run();
+      else if (type === 'video') editor.chain().focus().insertContent(`<video src="${url}" controls></video>`).run();
+      else if (type === 'audio') editor.chain().focus().insertContent(`<audio src="${url}" controls></audio>`).run();
+    } catch (error) {
+      alert('Media upload failed: ' + error.message);
     }
-    setEditorMode(mode);
+  };
+
+  const handleCategorySelect = (e) => {
+    const value = e.target.value;
+    if (value && !selectedCategoryIds.includes(value)) {
+      setSelectedCategoryIds([...selectedCategoryIds, value]);
+    }
+    // Reset select to default
+    e.target.value = ""; 
+  };
+
+  const removeCategory = (idToRemove) => {
+    setSelectedCategoryIds(selectedCategoryIds.filter(id => id !== idToRemove));
+  };
+
+  const getCategoryName = (id) => {
+    const cat = categories.find(c => c._id === id);
+    return cat ? cat.name : 'Unknown';
   };
 
   const handleTagInput = (e) => {
@@ -274,15 +288,23 @@ export default function WriteBlog() {
 
   const handleSubmit = async (statusOverride) => {
     if (!title) return alert('Title is required');
-    if (!heroImageFile) return alert('Header image is required');
+    if (selectedCategoryIds.length === 0) return alert('Please select at least one category');
+    if (!heroImageFile && !existingHeroImageUrl) return alert('Header image is required');
     
-    // Ensure content is synced if submitting from raw mode
     const content = editorMode === 'raw' ? rawHtmlCode : editor?.getHTML();
     if (!content || content === '<p></p>') return alert('Content is required');
 
+    // Date Validation
+    if (isScheduleEnabled) {
+        if (!scheduledAt) return alert('Please select a date for scheduling.');
+        if (new Date(scheduledAt) < new Date()) {
+            return alert('Scheduled date cannot be in the past.');
+        }
+    }
+
     setIsSubmitting(true);
     try {
-      // Handle Tags
+      // Process Tags
       const tagIds = await Promise.all(tags.map(async (tagName) => {
         const existing = availableTags.find(t => t.name.toLowerCase() === tagName.toLowerCase());
         if (existing) return existing._id;
@@ -290,22 +312,33 @@ export default function WriteBlog() {
         return newTag._id;
       }));
 
-      // Handle Image
-      const imgRes = await postService.uploadMedia(heroImageFile, token);
-      const heroUrl = imgRes.data.url.startsWith('/') ? `${API_BASE_URL}${imgRes.data.url}` : imgRes.data.url;
+      // Process Image
+      let heroUrl = existingHeroImageUrl;
+      if (heroImageFile) {
+        const imgRes = await postService.uploadMedia(heroImageFile, token);
+        heroUrl = imgRes.data.url.startsWith('/') ? `${API_BASE_URL}${imgRes.data.url}` : imgRes.data.url;
+      }
 
-      // Create Post
+      const finalStatus = statusOverride || (isScheduleEnabled && scheduledAt ? 'scheduled' : 'published');
+      
       const payload = {
         title,
         content,
-        categoryIds: [categoryId],
+        categoryIds: selectedCategoryIds, // Sending Array
         tagIds,
         headerImage: heroUrl,
-        status: statusOverride || (isScheduleEnabled && scheduledAt ? 'scheduled' : 'published'),
-        publishedAt: (isScheduleEnabled && scheduledAt) ? scheduledAt : undefined,
+        status: finalStatus,
+        publishedAt: (isScheduleEnabled && scheduledAt) 
+          ? scheduledAt 
+          : (finalStatus === 'published' ? new Date().toISOString() : undefined),
       };
 
-      await postService.create(payload, token);
+      if (editBlogId) {
+        await postService.update(editBlogId, payload, token);
+      } else {
+        await postService.create(payload, token);
+      }
+      
       navigate('/dashboard/view-blogs');
     } catch (error) {
       console.error(error);
@@ -318,8 +351,8 @@ export default function WriteBlog() {
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-10">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Write New Blog</h1>
-        <p className="text-muted-foreground">Create content that matters.</p>
+        <h1 className="text-3xl font-bold text-foreground">{editBlogId ? 'Edit Blog' : 'Write New Blog'}</h1>
+        <p className="text-muted-foreground">{editBlogId ? 'Update your content.' : 'Create content that matters.'}</p>
       </div>
 
       <div className="grid gap-6">
@@ -332,30 +365,52 @@ export default function WriteBlog() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter an engaging title..."
-              className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-muted-foreground"
             />
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
+            
+            {/* Multiple Category Selection */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Category</label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              >
-                <option value="" disabled>Select a category</option>
-                {categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-              </select>
+              <label className="text-sm font-medium text-foreground">Categories</label>
+              <div className="space-y-2">
+                 <select
+                    onChange={handleCategorySelect}
+                    defaultValue=""
+                    className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled>Select categories...</option>
+                    {categories.map(c => <option key={c._id} value={c._id} disabled={selectedCategoryIds.includes(c._id)}>{c.name}</option>)}
+                  </select>
+                  
+                  {/* Selected Categories Pills */}
+                  <div className="flex flex-wrap gap-2 min-h-[30px]">
+                    {selectedCategoryIds.map(id => (
+                       <span key={id} className="flex items-center gap-1 bg-secondary text-secondary-foreground px-2 py-1 rounded text-sm font-medium border border-border">
+                         {getCategoryName(id)}
+                         <button 
+                           onClick={() => removeCategory(id)} 
+                           className="ml-1 hover:text-red-500 transition-colors"
+                           type="button"
+                         >
+                           <X size={14} />
+                         </button>
+                       </span>
+                    ))}
+                    {selectedCategoryIds.length === 0 && <span className="text-xs text-muted-foreground italic">No categories selected</span>}
+                  </div>
+              </div>
             </div>
 
+            {/* Tags Input */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Tags</label>
-              <div className="flex flex-wrap gap-2 p-2 rounded-lg border border-border bg-background min-h-[46px]">
+              <div className="flex flex-wrap gap-2 p-2 rounded-lg border border-border bg-background min-h-[46px] focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
                 {tags.map((tag) => (
                   <span key={tag} className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded text-sm font-medium">
                     #{tag}
-                    <button onClick={() => setTags(tags.filter(t => t !== tag))} className="hover:text-primary/70"><X size={14} /></button>
+                    <button onClick={() => setTags(tags.filter(t => t !== tag))} className="hover:text-primary/70" type="button"><X size={14} /></button>
                   </span>
                 ))}
                 <input
@@ -372,12 +427,19 @@ export default function WriteBlog() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Header Image</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setHeroImageFile(e.target.files?.[0] || null)}
-              className="w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 text-sm text-muted-foreground cursor-pointer"
-            />
+            <div className="space-y-4">
+              {(existingHeroImageUrl && !heroImageFile) && (
+                <div className="relative w-full h-48 md:h-64 rounded-lg overflow-hidden border border-border">
+                  <img src={existingHeroImageUrl} alt="Header Preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setHeroImageFile(e.target.files?.[0] || null)}
+                className="w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 text-sm text-muted-foreground cursor-pointer"
+              />
+            </div>
           </div>
         </div>
 
@@ -386,34 +448,37 @@ export default function WriteBlog() {
           {/* Mode Tabs */}
           <div className="flex items-center border-b border-border bg-muted/30 px-2">
             <button
-              onClick={() => handleModeChange('write')}
+              onClick={() => {
+                  if (editorMode === 'raw') editor?.commands.setContent(rawHtmlCode);
+                  setEditorMode('write');
+              }}
               className={cn(
                 "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                editorMode === 'write' 
-                  ? "border-primary text-primary" 
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                editorMode === 'write' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               <PenTool size={16} /> Write
             </button>
             <button
-              onClick={() => handleModeChange('raw')}
+              onClick={() => {
+                  setRawHtmlCode(editor?.getHTML() || '');
+                  setEditorMode('raw');
+              }}
               className={cn(
                 "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                editorMode === 'raw' 
-                  ? "border-primary text-primary" 
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                editorMode === 'raw' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               <Code size={16} /> Raw Code
             </button>
             <button
-              onClick={() => handleModeChange('preview')}
+              onClick={() => {
+                  setRawHtmlCode(editor?.getHTML() || '');
+                  setEditorMode('preview');
+              }}
               className={cn(
                 "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                editorMode === 'preview' 
-                  ? "border-primary text-primary" 
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                editorMode === 'preview' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               <Eye size={16} /> Preview
@@ -439,13 +504,10 @@ export default function WriteBlog() {
             )}
 
             {editorMode === 'preview' && (
-              <div className="prose prose-sm sm:prose lg:prose-lg xl:prose-2xl p-6 max-w-none text-foreground prose-headings:text-foreground prose-p:text-muted-foreground prose-li:text-muted-foreground prose-li:marker:text-primary">
-                {editor?.isEmpty ? (
-                  <p className="text-muted-foreground italic text-center mt-10">Start writing to see the preview...</p>
-                ) : (
-                  <div dangerouslySetInnerHTML={{ __html: rawHtmlCode || editor?.getHTML() }} />
-                )}
-              </div>
+              <div 
+                className="prose prose-sm sm:prose lg:prose-lg xl:prose-2xl p-6 max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-li:marker:text-primary"
+                dangerouslySetInnerHTML={{ __html: rawHtmlCode || editor?.getHTML() }} 
+              />
             )}
           </div>
         </div>
@@ -471,8 +533,14 @@ export default function WriteBlog() {
               <input
                 type="datetime-local"
                 value={scheduledAt}
+                min={minDate} // Validator: Prevents picking past dates in UI
                 onChange={(e) => setScheduledAt(e.target.value)}
-                className="ml-2 px-3 py-1.5 rounded border border-border bg-background text-sm text-foreground focus:border-primary outline-none"
+                disabled={!!editBlogId && false} // Allow rescheduling if needed
+                className={cn(
+                  "ml-2 px-3 py-1.5 rounded border border-border bg-background text-sm text-foreground focus:border-primary outline-none",
+                  // The following class forces the calendar icon to match theme brightness
+                  "[color-scheme:light] dark:[color-scheme:dark]"
+                )}
               />
             )}
           </div>
@@ -481,6 +549,7 @@ export default function WriteBlog() {
             <button
               onClick={() => handleSubmit('draft')}
               disabled={isSubmitting}
+              type="button"
               className="flex-1 md:flex-none px-6 py-2.5 rounded-lg font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
             >
               Save Draft
@@ -488,10 +557,11 @@ export default function WriteBlog() {
             <button
               onClick={() => handleSubmit()}
               disabled={isSubmitting}
+              type="button"
               className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-medium bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all disabled:opacity-70"
             >
               {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-              {isScheduleEnabled ? 'Schedule' : 'Publish'}
+              {(isScheduleEnabled && scheduledAt) ? 'Schedule' : 'Publish'}
             </button>
           </div>
         </div>

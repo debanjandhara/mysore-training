@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { ThumbsUp, MessageCircle, FileEdit } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import { postService } from '../../services/postService';
 import { commentService } from '../../services/commentService';
@@ -24,6 +25,7 @@ const StatCard = ({ title, value, icon: Icon, colorClass }) => (
 
 export default function DashboardHome() {
   const { currentTheme } = useTheme();
+  const { token } = useAuth();
   const [stats, setStats] = useState({
     totalLikes: 0,
     totalComments: 0,
@@ -36,8 +38,8 @@ export default function DashboardHome() {
       try {
         // Fetch counts in parallel
         const [draftsData, commentsData] = await Promise.all([
-          postService.list({ status: 'draft', limit: 1 }),
-          commentService.list({ limit: 1 })
+          postService.list({ status: 'draft', limit: 1, dashboard: 'true' }, token),
+          commentService.list({ limit: 1, dashboard: 'true' }, token)
         ]);
 
         setStats({
@@ -53,7 +55,7 @@ export default function DashboardHome() {
     };
 
     fetchStats();
-  }, []);
+  }, [token]);
 
   // Placeholder chart data (empty for now as we don't have history API)
   const chartData = [

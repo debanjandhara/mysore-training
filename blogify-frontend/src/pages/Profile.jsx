@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTheme, THEMES } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { authService } from "../services/authService";
 import { getFonts, loadFont } from "../services/fontService";
-import { Search, Loader2, Upload, Camera } from "lucide-react";
+import { Search, Loader2, Upload, Camera, LogOut } from "lucide-react";
 
 /**
  * Sidebar Navigation Item
@@ -184,10 +185,11 @@ const ColorControl = ({ label, value, onChange }) => (
  */
 export default function Profile() {
   const { currentTheme, setTheme, cardOpacity, setCardOpacity } = useTheme();
-  const [activeTab, setActiveTab] = useState("appearance");
+  const [activeTab, setActiveTab] = useState("profile");
   const [localTheme, setLocalTheme] = useState(currentTheme);
 
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -329,6 +331,11 @@ export default function Profile() {
     setTheme(preset);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate("/auth");
+  };
+
   return (
     <div className="flex flex-col md:flex-row gap-12">
       {/* Sidebar */}
@@ -353,6 +360,15 @@ export default function Profile() {
             active={activeTab === "notifications"} 
             onClick={() => setActiveTab("notifications")}
           />
+          <div className="pt-4 mt-4 border-t border-border/50">
+            <button
+              onClick={handleLogout}
+              className="w-full text-left px-4 py-3 rounded-md text-small font-medium transition-all duration-200 flex items-center gap-3 text-destructive hover:bg-destructive/10"
+            >
+              <LogOut size={18} />
+              Logout
+            </button>
+          </div>
         </nav>
       </aside>
 

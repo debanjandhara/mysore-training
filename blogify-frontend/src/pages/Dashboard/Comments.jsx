@@ -2,9 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { Check, X, Trash2, MessageSquare } from 'lucide-react';
 import { commentService } from '../../services/commentService';
+import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 
 export default function Comments() {
+  const { token } = useAuth();
   const [comments, setComments] = useState([]);
   const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'approved'
   const [isLoading, setIsLoading] = useState(true);
@@ -13,7 +15,7 @@ export default function Comments() {
   const fetchComments = async () => {
     setIsLoading(true);
     try {
-      const response = await commentService.list({ limit: 100, status: 'All' });
+      const response = await commentService.list({ limit: 100, status: 'All', dashboard: 'true' }, token);
       setComments(response.data);
     } catch (err) {
       console.error("Failed to fetch comments:", err);

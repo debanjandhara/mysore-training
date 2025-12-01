@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const commentController = require('../controllers/comment.controller');
-const { authenticateJwt } = require('../middleware/auth');
+const { authenticateJwt, authenticateOptional } = require('../middleware/auth');
 
 // Public Routes (Listing)
-router.get('/comments', commentController.list); // Add list route (make it public or protected as needed, usually protected for admin list, but flexible here)
+router.get('/comments', authenticateOptional, commentController.list); // Add list route (make it public or protected as needed, usually protected for admin list, but flexible here)
 router.get('/post/:postId/comments', commentController.getByPost);
 router.get('/comments/:id/replies', commentController.getReplies);
 router.get('/comments/tree', commentController.getTree);

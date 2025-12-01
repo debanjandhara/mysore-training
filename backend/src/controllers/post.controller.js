@@ -52,7 +52,24 @@ const remove = async (req, res, next) => {
 
 const list = async (req, res, next) => {
   try {
-    const result = await postService.listPosts(req.query);
+    const params = { ...req.query };
+
+    // Security: If requesting drafts/scheduled, MUST be owner or admin
+    if (['draft', 'scheduled'].includes(params.status)) {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      if (req.user.role !== 'admin') {
+        params.authorId = req.user._id.toString();
+      }
+    }
+
+    // Dashboard specific: Filter by author for "All" as well if requested via dashboard flag
+    if (req.query.dashboard === 'true' && req.user && req.user.role !== 'admin') {
+      params.authorId = req.user._id.toString();
+    }
+
+    const result = await postService.listPosts(params);
     res.json(result);
   } catch (error) {
     next(error);
@@ -164,8 +181,18 @@ const getSeoPreview = async (req, res, next) => {
 
 const viewStat = async (req, res, next) => {
   try {
-    await postService.incrementView(req.params.id);
+    const userId = req.user ? req.user._id.toString() : null;
+    await postService.incrementView(req.params.id, userId);
     res.status(200).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const likePost = async (req, res, next) => {
+  try {
+    const post = await postService.toggleLike(req.params.id, req.user._id.toString());
+    res.json(post);
   } catch (error) {
     next(error);
   }
@@ -200,5 +227,6 @@ module.exports = {
   updateSeo,
   getSeoPreview,
   viewStat,
+  likePost,
   search
 };

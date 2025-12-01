@@ -1,228 +1,281 @@
-import React, { useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo, memo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion, LayoutGroup, AnimatePresence } from "framer-motion";
+import { 
+  Search, 
+  SlidersHorizontal, 
+  Loader2, 
+  Mail, 
+  ChevronLeft, 
+  ChevronRight,
+  CheckCircle2,
+  X
+} from "lucide-react";
 
-import { motion, LayoutGroup } from "framer-motion";
+// Contexts & Services
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 import { postService } from "../services/postService";
+import { categoryService } from "../services/categoryService";
 
+// UI Components
 import { Button } from "../components/ui/Button";
 import { GlassCard } from "../components/ui/GlassCard";
-import { Search, SlidersHorizontal } from "lucide-react";
 
-// --- Sections ---
+// --- Helpers ---
 
-/**
- * Hero Section Component
- * Displays the main value proposition and CTA.
- */
-const HeroSection = ({ currentTheme, gradientText, onStartWriting, onCreateAccount }) => (
-  <section className="text-center space-y-8 pt-12 md:pt-20 col-span-12 max-w-4xl mx-auto">
-    <div 
-      className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-small font-medium uppercase tracking-wider transition-colors hover:bg-white/10 backdrop-blur-md"
-      style={{ borderColor: `${currentTheme.secondary}40`, color: currentTheme.secondary }}
+const formatDate = (dateString) => {
+  if (!dateString) return "Recently";
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+// --- Sub-Components ---
+
+const Hero = memo(({ theme, onStart }) => (
+  <section className="relative flex min-h-[100dvh] w-full flex-col items-center justify-center space-y-8 px-4 text-center">
+    {/* Background Decorative Elements */}
+    <div className="absolute -left-20 top-20 h-72 w-72 rounded-full bg-primary/20 blur-[120px]" />
+    <div className="absolute -right-20 bottom-20 h-72 w-72 rounded-full bg-secondary/20 blur-[120px]" />
+
+    {/* Badge */}
+    <motion.div 
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium uppercase tracking-wider text-secondary backdrop-blur-md"
     >
-      <span className="w-2 h-2 rounded-full bg-secondary mr-2 animate-pulse"/>
+      <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-secondary" />
       New: AI features integrated
-    </div>
-    
-    <h1 className="text-h1 md:text-[64px] leading-tight font-extrabold tracking-tight text-foreground drop-shadow-sm">
-      Your own <span style={gradientText}>Blogify</span> platform
-    </h1>
-    
-    <p className="max-w-2xl mx-auto text-h3 text-foreground/60 font-light leading-relaxed">
-      This is your space to think out loud, to share what matters, and to write without filters. Whether it's one word or thousand, your story starts right here.
-    </p>
-    
-    <div className="flex flex-wrap justify-center gap-4 pt-8">
-      <Button size="lg" onClick={onStartWriting}>Start Writing</Button>
-      <Button variant="outline" size="lg" onClick={onCreateAccount}>Create Account</Button>
+    </motion.div>
+
+    {/* Heading */}
+    <motion.h1 
+      initial={{ opacity: 0, scale: 0.9 }}
+      whileInView={{ opacity: 1, scale: 1 }}
+      viewport={{ once: true }}
+      transition={{ delay: 0.1, duration: 0.5 }}
+      className="max-w-5xl text-5xl font-extrabold tracking-tight drop-shadow-sm md:text-7xl lg:text-8xl"
+    >
+      Your own{" "}
+      <span
+        style={{
+          background: `linear-gradient(to right, ${theme.primary}, ${theme.secondary})`,
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+        }}
+      >
+        Blogify
+      </span>{" "}
+      platform
+    </motion.h1>
+
+    {/* Subheading */}
+    <motion.p 
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ delay: 0.3 }}
+      className="mx-auto max-w-2xl text-xl font-light text-foreground/60 md:text-2xl"
+    >
+      This is your space to think out loud, to share what matters. Your story starts right here.
+    </motion.p>
+
+    {/* CTA */}
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: 0.4 }}
+      className="pt-6"
+    >
+      <Button size="lg" onClick={onStart} className="rounded-full px-12 py-7 text-lg shadow-2xl shadow-primary/25 hover:scale-105 active:scale-95 transition-all">
+        Start Writing
+      </Button>
+    </motion.div>
+  </section>
+));
+
+const SearchSection = ({ search, setSearch, onFilter }) => (
+  <section className="sticky top-0 z-50 w-full border-b border-white/5 bg-background/80 py-4 backdrop-blur-xl transition-all duration-300 supports-[backdrop-filter]:bg-background/60">
+    <div className="mx-auto flex max-w-4xl items-center gap-3 px-4">
+      <div className="group relative flex-1">
+        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-foreground/40 transition-colors group-focus-within:text-primary" />
+        <input
+          type="text"
+          placeholder="Search for blog..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-12 w-full rounded-full border border-input bg-background/50 pl-12 pr-4 outline-none transition-all focus:ring-2 focus:ring-primary/50 hover:bg-background/80"
+        />
+      </div>
+      <Button className="hidden h-12 rounded-full px-8 md:block">Search</Button>
+      <button
+        onClick={onFilter}
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-input bg-background/50 transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <SlidersHorizontal className="h-5 w-5" />
+      </button>
     </div>
   </section>
 );
 
-/**
- * V2 AI Feature Section
- * Showcases the search capability with a glassmorphic input.
- */
-const V2AiSection = ({ onOpenFilter, searchText, setSearchText }) => (
-  <section className="col-span-12 py-16 text-center">
-    <div className="max-w-3xl mx-auto space-y-8">
-      <div className="relative flex items-center max-w-xl mx-auto gap-2">
-        <div className="relative flex-1 group">
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40">
-            <Search className="w-5 h-5" />
-          </div>
-          <input 
-            type="text" 
-            placeholder="Search for blog..." 
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            className="w-full h-12 pl-12 pr-4 rounded-full border border-input bg-background/50 backdrop-blur-md text-foreground placeholder:text-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring transition-all"
-          />
-        </div>
-        <Button className="h-12 rounded-full px-8">Search</Button>
+const CategorySelector = ({ categories, active, setActive }) => {
+  const scrollContainerRef = useRef(null);
+  const itemRefs = useRef({});
+
+  const scroll = (direction) => {
+    if (scrollContainerRef.current) {
+      const scrollAmount = 300;
+      scrollContainerRef.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (active && itemRefs.current[active] && scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const item = itemRefs.current[active];
+      const containerWidth = container.offsetWidth;
+      const itemLeft = item.offsetLeft;
+      const itemWidth = item.offsetWidth;
+      const scrollLeft = itemLeft - containerWidth / 2 + itemWidth / 2;
+      container.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    }
+  }, [active]);
+
+  return (
+    <section className="relative mx-auto w-full max-w-6xl py-6">
+      <div className="flex items-center gap-2 px-2">
+        {/* Left Arrow - Enlarged & Themed */}
         <button 
-          onClick={onOpenFilter}
-          className="h-12 w-12 rounded-full border border-input bg-background/50 hover:bg-accent flex items-center justify-center transition-colors backdrop-blur-md text-foreground/70 hover:text-foreground"
+          onClick={() => scroll("left")}
+          className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full border border-input bg-background/50 text-foreground shadow-sm transition-all hover:bg-primary hover:text-white hover:border-primary hover:scale-110 md:flex"
+          aria-label="Scroll left"
         >
-          <SlidersHorizontal className="w-5 h-5" />
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+
+        <div className="relative flex-1 overflow-hidden">
+          <div className="pointer-events-none absolute bottom-0 left-0 top-0 z-10 w-12 bg-gradient-to-r from-background to-transparent" />
+          <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-10 w-12 bg-gradient-to-l from-background to-transparent" />
+
+          <div 
+            ref={scrollContainerRef}
+            className="flex items-center gap-2 overflow-x-auto no-scrollbar px-4 py-2 scroll-smooth"
+          >
+            <LayoutGroup>
+              {categories.map((cat) => {
+                const isActive = active === cat;
+                return (
+                  <button
+                    key={cat}
+                    ref={(el) => (itemRefs.current[cat] = el)}
+                    onClick={() => setActive(cat)}
+                    className={`
+                      relative px-6 py-3 rounded-full text-sm font-medium transition-colors shrink-0 z-0
+                      ${isActive ? "text-primary-foreground" : "text-foreground/70 hover:text-foreground"}
+                    `}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeCategoryPill"
+                        className="absolute inset-0 -z-10 rounded-full bg-primary"
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative z-10 whitespace-nowrap">{cat}</span>
+                  </button>
+                );
+              })}
+            </LayoutGroup>
+          </div>
+        </div>
+
+        {/* Right Arrow - Enlarged & Themed */}
+        <button 
+          onClick={() => scroll("right")}
+          className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full border border-input bg-background/50 text-foreground shadow-sm transition-all hover:bg-primary hover:text-white hover:border-primary hover:scale-110 md:flex"
+          aria-label="Scroll right"
+        >
+          <ChevronRight className="h-6 w-6" />
         </button>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
-/**
- * Gooey Category Selector
- * Uses framer-motion layout transitions and SVG filters for organic morphing effects.
- */
-const CategorySelector = ({ categories, activeCategory, setActiveCategory }) => (
-  <section className="col-span-12 py-8 overflow-x-visible">
-    <div className="flex justify-center">
-      <div className="relative inline-flex p-1 gap-1 bg-muted/10 rounded-full isolate">
-        {/* Gooey Background Layer */}
-        <div 
-          className="absolute inset-0 flex gap-1 p-1 pointer-events-none select-none" 
-          style={{ filter: "url(#gooey)" }} 
-        >
-          <LayoutGroup>
-            {categories.map((cat) => {
-              const isActive = activeCategory === cat;
-              return (
-                <div key={cat} className="relative px-6 py-2 rounded-full flex items-center justify-center">
-                  {/* Ghost Text for Sizing */}
-                  <span className="text-small font-medium opacity-0">{cat}</span>
-                  
-                  {isActive && (
-                    <motion.div
-                      layoutId="activePill"
-                      className="absolute inset-0 bg-primary rounded-full"
-                      transition={{
-                        type: "spring",
-                        stiffness: 300,
-                        damping: 30
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </LayoutGroup>
-        </div>
-
-        {/* Interactive Foreground Layer */}
-        <div className="relative flex gap-1 z-10">
-          {categories.map((cat) => {
-            const isActive = activeCategory === cat;
-            return (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`relative px-6 py-2 rounded-full text-small font-medium transition-colors duration-300 flex items-center justify-center ${
-                  isActive ? "text-primary-foreground" : "text-foreground/60 hover:text-foreground"
-                }`}
-              >
-                <span className="relative">{cat}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  </section>
-);
-
-/**
- * Blog Grid Component
- * Displays blog posts in a 12-column responsive grid.
- * Applies category and text search filters.
- */
-const BlogGrid = ({ activeCategory, searchText, blogs, loading }) => {
-  const normalizedSearch = searchText?.trim().toLowerCase() || "";
-
-  const categoryFiltered =
-    activeCategory === "All"
-      ? blogs
-      : blogs.filter((blog) =>
-          Array.isArray(blog.tags) && blog.tags.includes(activeCategory)
-        );
-
-  const visibleBlogs = !normalizedSearch
-    ? categoryFiltered
-    : categoryFiltered.filter((blog) => {
-        const title = blog.title || "";
-        const excerpt = blog.excerpt || "";
-        const tags = Array.isArray(blog.tags) ? blog.tags : [];
-
-        const inTitle = title.toLowerCase().includes(normalizedSearch);
-        const inExcerpt = excerpt.toLowerCase().includes(normalizedSearch);
-        const inTags = tags.some((t) =>
-          (t || "").toLowerCase().includes(normalizedSearch)
-        );
-        return inTitle || inExcerpt || inTags;
-      });
-
+const BlogGrid = ({ blogs, loading }) => {
   if (loading) {
     return (
-      <section className="col-span-12 py-8 text-center text-muted-foreground">
-        Loading blogs...
-      </section>
+      <div className="flex h-64 items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+        <span>Loading stories...</span>
+      </div>
+    );
+  }
+
+  if (blogs.length === 0) {
+    return (
+      <div className="py-24 text-center">
+        <p className="text-xl text-muted-foreground">No blogs found matching your criteria.</p>
+      </div>
     );
   }
 
   return (
-    <section className="col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-8">
-      {visibleBlogs.map((blog) => (
-        <Link to={`/blog/${blog.slug}`} key={blog.slug} className="block h-full">
-          <GlassCard
-            className="group h-full relative overflow-hidden hover:border-primary/30 transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/5 p-0 flex flex-col"
-          >
-            {/* Top image: fills full width of card, no padding, slightly rounded */}
-            <motion.div
-              layoutId={`blog-image-${blog.slug}`}
-              className="w-full aspect-[16/9] bg-gradient-to-br from-muted/20 to-muted/40 group-hover:scale-105 transition-transform duration-700 rounded-t-2xl overflow-hidden"
-            >
+    <section className="grid grid-cols-1 gap-6 px-4 py-4 md:grid-cols-2 lg:grid-cols-3 xl:px-8 max-w-7xl mx-auto">
+      {blogs.map((blog) => (
+        <Link
+          to={`/blog/${blog.slug}`}
+          key={blog._id || blog.slug}
+          className="group block h-full"
+        >
+          <GlassCard className="flex h-full flex-col overflow-hidden p-0 transition-all duration-500 hover:-translate-y-2 hover:shadow-xl hover:shadow-primary/5">
+            <div className="aspect-[16/9] w-full overflow-hidden bg-muted/20">
               <img
-                src={blog.image}
+                src={blog.headerImage || "/placeholder.jpg"}
                 alt={blog.title}
-                className="w-full h-full object-cover"
+                loading="lazy"
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
-            </motion.div>
-
-            {/* Content: padded section below image */}
-            <div className="p-6 space-y-4 flex-1 flex flex-col">
-              {Array.isArray(blog.tags) && blog.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {blog.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <motion.h3
-                layoutId={`blog-title-${blog.slug}`}
-                className="text-h3 font-bold leading-tight text-foreground group-hover:text-primary transition-colors"
-              >
+            </div>
+            <div className="flex flex-1 flex-col space-y-4 p-6">
+              <div className="flex flex-wrap gap-2">
+                {blog.tags?.slice(0, 3).map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+              <h3 className="text-2xl font-bold leading-tight transition-colors group-hover:text-primary">
                 {blog.title}
-              </motion.h3>
-              <p className="text-small text-foreground/60 line-clamp-2">
-                {blog.excerpt}
+              </h3>
+              <p className="line-clamp-2 text-sm text-foreground/60">
+                {blog.seo?.metaDescription || blog.excerpt}
               </p>
-              
-              <div className="mt-auto pt-4 flex items-center justify-between text-xs text-muted-foreground border-t border-border/50">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                    {blog.author[0]}
-                  </div>
-                  {blog.author}
+              <div className="mt-auto flex items-center gap-3 border-t border-border/50 pt-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary">
+                  {blog.author?.name?.[0] || "A"}
                 </div>
-                {typeof blog.views === "number" && (
-                  <span>{blog.views.toLocaleString()} views</span>
-                )}
+                <div className="flex flex-col justify-center">
+                  <span className="mb-1 text-sm font-medium leading-none text-foreground">
+                    {blog.author?.name || "Anonymous"}
+                  </span>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>{formatDate(blog.createdAt)}</span>
+                    <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                    <span>{blog.cachedStats?.viewCount || 0} views</span>
+                  </div>
+                </div>
               </div>
             </div>
           </GlassCard>
@@ -232,152 +285,399 @@ const BlogGrid = ({ activeCategory, searchText, blogs, loading }) => {
   );
 };
 
-/**
- * Newsletter Subscription Section
- */
-const Newsletter = () => (
-  <section className="col-span-12 py-24 max-w-2xl mx-auto text-center space-y-8">
-    <div className="space-y-4">
-      <h2 className="text-h2 font-bold text-foreground tracking-tight">Never Miss a Blog</h2>
-      <p className="text-body text-foreground/60">Subscribe to get the latest blogs, new tech and exclusive news.</p>
-    </div>
-    <GlassCard className="flex flex-col sm:flex-row gap-4 p-2 !rounded-full">
-      <input
-        type="email"
-        placeholder="Enter your email ID"
-        className="flex-1 h-12 bg-transparent px-6 text-body text-foreground placeholder:text-foreground/30 focus:outline-none"
-      />
-      <Button className="w-full sm:w-auto rounded-full">Subscribe</Button>
-    </GlassCard>
-  </section>
-);
+const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) pages.push(i);
 
-/**
- * Filter Modal Popup
- * Controlled component for filtering content.
- */
-const FilterModal = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
+  if (totalPages <= 1) return null;
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <GlassCard className="w-full max-w-md relative animate-in zoom-in-95 duration-300 !bg-background border-border shadow-2xl">
-        <button onClick={onClose} className="absolute top-4 right-4 text-foreground/50 hover:text-foreground">✕</button>
-        <h3 className="text-h3 font-bold mb-6">Filter & Sort</h3>
-        
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-small font-medium text-foreground/70">Price Range</label>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full w-1/2 bg-primary rounded-full" />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-small font-medium text-foreground/70">Sort By</label>
-            <div className="relative">
-              <select className="w-full h-12 bg-muted/50 border border-input rounded-full px-6 text-small text-foreground appearance-none focus:ring-2 focus:ring-ring">
-                <option>Latest</option>
-                <option>Popular</option>
-                <option>Oldest</option>
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">↓</div>
-            </div>
-          </div>
-          
-          <Button onClick={onClose} className="w-full">Apply Filters</Button>
-        </div>
-      </GlassCard>
+    <div className="flex flex-wrap items-center justify-center gap-2 py-12">
+      <button
+        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+        disabled={currentPage === 1}
+        className="flex h-12 w-12 items-center justify-center rounded-full border border-input bg-background/50 text-foreground transition-all hover:bg-primary hover:text-white hover:border-primary hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-background/50 disabled:hover:text-foreground"
+      >
+        <ChevronLeft className="h-6 w-6" />
+      </button>
+
+      {pages.map((page) => (
+        <button
+          key={page}
+          onClick={() => onPageChange(page)}
+          className={`
+            h-12 w-12 rounded-full text-sm font-bold transition-all hover:scale-110
+            ${
+              currentPage === page
+                ? "bg-primary text-white shadow-lg shadow-primary/30 scale-110"
+                : "border border-input bg-background/50 text-foreground hover:bg-primary hover:text-white hover:border-primary"
+            }
+          `}
+        >
+          {page}
+        </button>
+      ))}
+
+      <button
+        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage === totalPages}
+        className="flex h-12 w-12 items-center justify-center rounded-full border border-input bg-background/50 text-foreground transition-all hover:bg-primary hover:text-white hover:border-primary hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-background/50 disabled:hover:text-foreground"
+      >
+        <ChevronRight className="h-6 w-6" />
+      </button>
     </div>
   );
 };
 
-// --- Main Page ---
+const Newsletter = memo(({ onSubscribe }) => (
+  <section className="px-4 py-24">
+    <div className="mx-auto max-w-5xl">
+      <GlassCard className="relative overflow-hidden p-8 text-center md:p-16">
+        <div className="absolute -left-10 -top-10 h-64 w-64 rounded-full bg-primary/20 blur-[80px]" />
+        <div className="absolute -right-10 -bottom-10 h-64 w-64 rounded-full bg-secondary/20 blur-[80px]" />
+        <div className="relative z-10 mx-auto max-w-2xl space-y-8">
+          <div className="space-y-4">
+            <h2 className="text-3xl font-bold tracking-tight md:text-5xl">
+              Stay in the loop
+            </h2>
+            <p className="text-lg text-foreground/70">
+              Join our community to get the latest stories, trends, and updates delivered straight to your inbox.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <Button 
+              size="lg" 
+              onClick={onSubscribe}
+              className="group h-14 rounded-full px-10 text-lg shadow-xl shadow-primary/10 transition-all hover:shadow-primary/20"
+            >
+              <Mail className="mr-2 h-5 w-5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+              Subscribe to Newsletter
+            </Button>
+          </div>
+        </div>
+      </GlassCard>
+    </div>
+  </section>
+));
+
+const SubscribeModal = ({ isOpen, onClose }) => {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState("idle"); 
+
+  useEffect(() => {
+    if (isOpen) {
+      setEmail("");
+      setStatus("idle");
+    }
+  }, [isOpen]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setStatus("loading");
+    setTimeout(() => {
+      setStatus("success");
+    }, 1500);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          className="relative w-full max-w-md"
+        >
+          <GlassCard className="relative !bg-background/95 p-8 shadow-2xl ring-1 ring-white/10">
+            <button
+              onClick={onClose}
+              className="absolute right-4 top-4 rounded-full p-1 text-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {status === "success" ? (
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10 text-green-500 ring-1 ring-green-500/20">
+                  <CheckCircle2 className="h-8 w-8" />
+                </div>
+                <h3 className="text-2xl font-bold">Subscribed!</h3>
+                <p className="mt-2 text-foreground/60">
+                  Thank you for joining. Keep an eye on your inbox!
+                </p>
+                <Button onClick={onClose} variant="outline" className="mt-8 w-full rounded-full">
+                  Close
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-6 pt-4">
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold">Join the Newsletter</h3>
+                  <p className="mt-2 text-sm text-foreground/60">
+                    Get the latest blogs and news directly to your inbox.
+                  </p>
+                </div>
+
+                <div className="space-y-2 text-left">
+                  <label className="ml-1 text-sm font-medium text-foreground/80">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="h-12 w-full rounded-lg border border-input bg-background/50 pl-10 pr-4 outline-none transition-all focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
+
+                <Button 
+                  type="submit" 
+                  disabled={status === "loading"}
+                  className="h-12 w-full rounded-lg text-base"
+                >
+                  {status === "loading" ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Subscribing...
+                    </>
+                  ) : (
+                    "Subscribe Now"
+                  )}
+                </Button>
+              </form>
+            )}
+          </GlassCard>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+};
 
 /**
- * Landing Page Component
- * The main entry point for the application.
+ * FilterModal:
+ * - Dropdown fixed to use "bg-background" and "text-foreground".
+ * - Ensures compatibility with dark/light themes.
  */
+const FilterModal = ({ isOpen, onClose, sort, setSort, count, setCount }) => {
+    if (!isOpen) return null;
+    return (
+      <div className="fixed inset-0 z-[60] flex animate-in fade-in items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <GlassCard className="relative w-full max-w-sm space-y-6 !bg-background border-border p-6 shadow-2xl">
+          <button onClick={onClose} className="absolute right-4 top-4 text-foreground/50 hover:text-foreground">✕</button>
+          <h3 className="text-xl font-bold">Filter & Sort</h3>
+          
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground/70">Items per page: {count}</label>
+            <input 
+              type="range" 
+              min="3" 
+              max="30" 
+              step="3" 
+              value={count} 
+              onChange={(e) => setCount(Number(e.target.value))} 
+              className="w-full accent-primary cursor-pointer" 
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground/70">Sort By</label>
+            <div className="relative">
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                className="h-12 w-full appearance-none rounded-lg border border-input bg-background px-4 text-sm text-foreground outline-none transition-all focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+              >
+                {/* Adding explicit class names to options to force theme colors in native dropdowns */}
+                <option value="latest" className="bg-background text-foreground py-2">Latest</option>
+                <option value="popular" className="bg-background text-foreground py-2">Most Viewed</option>
+              </select>
+              {/* Custom Arrow Icon for Dropdown */}
+              <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-foreground/50">
+                <ChevronRight className="h-4 w-4 rotate-90" />
+              </div>
+            </div>
+          </div>
+
+          <Button onClick={onClose} className="w-full h-12 text-base">Apply Filters</Button>
+        </GlassCard>
+      </div>
+    );
+};
+
+// --- Main Landing Component ---
+
 export default function Landing() {
   const { currentTheme } = useTheme();
+  const { isAuthenticated } = useAuth(); 
   const navigate = useNavigate();
-  
+
+  // State
+  const [categories, setCategories] = useState(["All"]);
   const [activeCategory, setActiveCategory] = useState("All");
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [searchText, setSearchText] = useState("");
+  const [search, setSearch] = useState("");
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  const categories = ["All", "Design", "Development", "AI", "Business", "Lifestyle"];
-
-  const gradientText = {
-    backgroundImage: `linear-gradient(to right, ${currentTheme.primary}, ${currentTheme.secondary})`,
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  };
+  // Modals
+  const [isFilterOpen, setFilterOpen] = useState(false);
+  const [isSubscribeOpen, setSubscribeOpen] = useState(false);
+  
+  // Pagination & Sort
+  const [postCount, setPostCount] = useState(6);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState("latest");
 
   useEffect(() => {
-    const loadBlogs = async () => {
-      try {
-        const result = await postService.list({ limit: 30 });
-        const items = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
-
-        const mapped = items.map((post) => ({
-          slug: post.slug,
-          title: post.title,
-          excerpt: post.seo?.metaDescription || "",
-          image: post.headerImage,
-          tags: Array.isArray(post.tags)
-            ? post.tags
-            : Array.isArray(post.tagIds)
-            ? post.tagIds.map((t) => t.name || t)
-            : [],
-          author: post.authorId?.name || "Unknown",
-          views: post.cachedStats?.viewCount ?? 0,
-        }));
-
-        setBlogs(mapped);
-      } catch (error) {
-        console.error("Failed to load blogs for landing:", error);
-        setBlogs([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadBlogs();
+    let isMounted = true;
+    categoryService.getSelectList().then((data) => {
+      if (isMounted) setCategories(["All", ...data.map((c) => c.name)]);
+    }).catch(console.error);
+    return () => { isMounted = false; };
   }, []);
 
-  return (
-    <div className="grid grid-cols-12 gap-y-16 gap-x-6 pb-20">
-      <HeroSection 
-        currentTheme={currentTheme} 
-        gradientText={gradientText}
-        onStartWriting={() => navigate("/dashboard/write-blog")}
-        onCreateAccount={() => navigate("/auth")}
-      />
-      
-      <V2AiSection 
-        onOpenFilter={() => setIsFilterOpen(true)} 
-        searchText={searchText}
-        setSearchText={setSearchText}
-      />
-      
-      <CategorySelector 
-        categories={categories} 
-        activeCategory={activeCategory} 
-        setActiveCategory={setActiveCategory} 
-      />
-      
-      <BlogGrid 
-        activeCategory={activeCategory} 
-        searchText={searchText}
-        blogs={blogs}
-        loading={loading}
-      />
-      
-      <Newsletter />
+  useEffect(() => {
+    setLoading(true);
+    const params = { limit: 100 }; 
+    postService.list(params).then((res) => {
+      const allBlogs = Array.isArray(res.data) ? res.data : [];
+      const mapped = allBlogs.map((post) => ({
+        _id: post._id,
+        slug: post.slug,
+        title: post.title,
+        excerpt: post.seo?.metaDescription || "",
+        headerImage: post.headerImage,
+        tags: Array.isArray(post.tags) ? post.tags : post.tagIds?.map((t) => t.name || t) || [],
+        author: { name: post.authorId?.name || "Unknown" },
+        createdAt: post.createdAt,
+        cachedStats: post.cachedStats,
+      }));
+      setBlogs(mapped);
+    }).catch(console.error).finally(() => setLoading(false));
+  }, []);
 
-      <FilterModal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
+  useEffect(() => { setCurrentPage(1); }, [search, activeCategory, postCount]);
+
+  const filteredBlogs = useMemo(() => {
+    let result = blogs;
+    if (search) {
+      const lower = search.toLowerCase();
+      result = result.filter((b) => b.title?.toLowerCase().includes(lower) || b.tags?.some((t) => t.toLowerCase().includes(lower)));
+    }
+    if (activeCategory !== "All") {
+      result = result.filter((b) => b.tags?.includes(activeCategory));
+    }
+    return [...result].sort((a, b) => {
+      if (sortBy === "popular") return (b.cachedStats?.viewCount || 0) - (a.cachedStats?.viewCount || 0);
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+  }, [blogs, search, activeCategory, sortBy]);
+
+  const paginatedBlogs = useMemo(() => {
+    const indexOfLastPost = currentPage * postCount;
+    const indexOfFirstPost = indexOfLastPost - postCount;
+    return filteredBlogs.slice(indexOfFirstPost, indexOfLastPost);
+  }, [filteredBlogs, currentPage, postCount]);
+
+  const totalPages = Math.ceil(filteredBlogs.length / postCount);
+
+  // Scroll to top of SearchSection (main content) when page changes
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    if (!isAuthenticated) {
+      const searchSection = document.getElementById("main-content-start");
+      if (searchSection) {
+        // Adjust offset for sticky header if needed
+        const yOffset = -60; 
+        const y = searchSection.getBoundingClientRect().top + window.scrollY + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  if (isAuthenticated) {
+    // --- AUTHENTICATED VIEW (No Hero) ---
+    return (
+      <div className="min-h-screen pb-20">
+        <SearchSection 
+          search={search} 
+          setSearch={setSearch} 
+          onFilter={() => setFilterOpen(true)} 
+        />
+        <CategorySelector 
+          categories={categories} 
+          active={activeCategory} 
+          setActive={setActiveCategory} 
+        />
+        <BlogGrid blogs={paginatedBlogs} loading={loading} />
+        {!loading && filteredBlogs.length > 0 && (
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
+        )}
+        <FilterModal isOpen={isFilterOpen} onClose={() => setFilterOpen(false)} sort={sortBy} setSort={setSortBy} count={postCount} setCount={setPostCount} />
+      </div>
+    );
+  }
+
+  // --- GUEST VIEW (With Hero) ---
+  return (
+    <div className="w-full">
+      
+      {/* 1. Hero Section (Natural Flow) */}
+      <Hero 
+        theme={currentTheme} 
+        onStart={() => navigate("/auth")} 
+      />
+
+      {/* 2. Main Content (Starts right after Hero) */}
+      <div id="main-content-start" className="relative z-10 bg-background pb-20">
+        
+        {/* Sticky Search */}
+        <SearchSection 
+          search={search} 
+          setSearch={setSearch} 
+          onFilter={() => setFilterOpen(true)} 
+        />
+        
+        <CategorySelector 
+          categories={categories} 
+          active={activeCategory} 
+          setActive={setActiveCategory} 
+        />
+        
+        <BlogGrid 
+          blogs={paginatedBlogs} 
+          loading={loading} 
+        />
+
+        {!loading && filteredBlogs.length > 0 && (
+          <Pagination 
+            currentPage={currentPage} 
+            totalPages={totalPages} 
+            onPageChange={handlePageChange} 
+          />
+        )}
+        
+        <Newsletter onSubscribe={() => setSubscribeOpen(true)} />
+      </div>
+
+      {/* Modals */}
+      <FilterModal 
+        isOpen={isFilterOpen} 
+        onClose={() => setFilterOpen(false)} 
+        sort={sortBy} 
+        setSort={setSortBy} 
+        count={postCount} 
+        setCount={setPostCount} 
+      />
+      <SubscribeModal 
+        isOpen={isSubscribeOpen}
+        onClose={() => setSubscribeOpen(false)}
+      />
     </div>
   );
 }

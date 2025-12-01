@@ -35,6 +35,32 @@ const authenticateJwt = (req, res, next) => {
   middleware(req, res, next);
 };
 
+const authenticateOptional = (req, res, next) => {
+  const middleware = passport.authenticate('jwt', { session: false }, (err, user) => {
+    if (err) {
+      // Log error but continue without user
+      console.warn('[auth.authenticateOptional] Error in passport callback:', err);
+      return next();
+    }
+
+    if (user) {
+      req.user = user;
+      const authHeader = req.headers['authorization'] || '';
+      req.token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+      
+      console.log('[auth.authenticateOptional] Authenticated user (optional):', {
+        id: user._id?.toString?.() || user.id,
+        role: user.role
+      });
+    }
+
+    next();
+  });
+
+  middleware(req, res, next);
+};
+
 module.exports = {
   authenticateJwt,
+  authenticateOptional
 };

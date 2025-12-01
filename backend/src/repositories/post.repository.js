@@ -97,6 +97,24 @@ const incrementStats = (id, field, value = 1) => {
   return Post.findByIdAndUpdate(id, { $inc: { [`cachedStats.${field}`]: value } }, { new: true });
 };
 
+const addViewer = (id, userId) => {
+  return Post.findByIdAndUpdate(id, { $addToSet: { viewedBy: userId } }, { new: true });
+};
+
+const addLike = (id, userId) => {
+  return Post.findByIdAndUpdate(id, { 
+    $addToSet: { likes: userId },
+    $inc: { 'cachedStats.aggregateRating': 1 }
+  }, { new: true });
+};
+
+const removeLike = (id, userId) => {
+  return Post.findByIdAndUpdate(id, { 
+    $pull: { likes: userId },
+    $inc: { 'cachedStats.aggregateRating': -1 }
+  }, { new: true });
+};
+
 /**
  * Search posts (Text Search)
  * @param {string} query 
@@ -133,6 +151,9 @@ module.exports = {
   findPosts,
   countPosts,
   incrementStats,
+  addViewer,
+  addLike,
+  removeLike,
   searchPosts,
   bulkUpdatePosts
 };

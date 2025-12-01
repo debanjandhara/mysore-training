@@ -1,11 +1,18 @@
 import { API_BASE_URL, fetchWithAuth } from './authService';
 
 export const postService = {
-  list: async (params = {}) => {
+  list: async (params = {}, accessToken = null) => {
     const query = new URLSearchParams(params).toString();
     const url = query
       ? `${API_BASE_URL}/api/posts?${query}`
       : `${API_BASE_URL}/api/posts`;
+
+    if (accessToken) {
+      const response = await fetchWithAuth(url, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      return response; // fetchWithAuth returns json data
+    }
 
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch posts');
@@ -70,6 +77,16 @@ export const postService = {
     return response;
   },
 
+  delete: async (id, accessToken) => {
+    const response = await fetchWithAuth(`${API_BASE_URL}/api/posts/${id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    return response;
+  },
+
   uploadMedia: async (file, accessToken) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -87,5 +104,18 @@ export const postService = {
       throw new Error(error.message || 'Upload failed');
     }
     return response.json();
+  },
+
+  viewStat: async (id) => {
+    // Attempt with auth first to track unique user
+    return fetchWithAuth(`${API_BASE_URL}/api/posts/${id}/stat/view`, {
+      method: 'POST'
+    });
+  },
+
+  like: async (id) => {
+    return fetchWithAuth(`${API_BASE_URL}/api/posts/${id}/like`, {
+      method: 'POST'
+    });
   }
 };

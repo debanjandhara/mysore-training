@@ -38,6 +38,8 @@ const postSchema = new Schema({
     commentCount: { type: Number, default: 0 },
     aggregateRating: { type: Number, default: 0 }
   },
+  viewedBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   deletedAt: { type: Date, default: null } // Soft delete support
 }, { timestamps: true });
 

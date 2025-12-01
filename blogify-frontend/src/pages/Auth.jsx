@@ -58,7 +58,7 @@ export default function Auth() {
   const [success, setSuccess] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, login } = useAuth();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
   useEffect(() => {
@@ -111,12 +111,14 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
-      const res = await authService.login(loginData);
-      setSuccess(res.message);
-      setTimeout(() => {
+      const res = await login(loginData);
+      if (res && res.success) {
+        setSuccess(res.message);
+        setTimeout(() => {
         // Ideally redirect here
         navigate("/"); // Redirect to Home/Landing
-      }, 1000);
+        }, 1000);
+      }
     } catch (err) {
       setError(err.message || "Login failed");
     } finally {
