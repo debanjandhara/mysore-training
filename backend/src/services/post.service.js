@@ -117,6 +117,8 @@ const deletePost = async (id, userId, isAdmin, force = false) => {
 
 /**
  * List posts with filters
+ * Also auto-promotes scheduled posts whose publishedAt time has passed
+ * so they become published without needing a separate cron job.
  * @param {Object} params 
  * @returns {Promise<Object>}
  */
@@ -125,6 +127,16 @@ const listPosts = async (params) => {
     page = 1, limit = 10, sort = 'publishedAt:desc', 
     status, categoryId, tagId, authorId 
   } = params;
+
+  // Auto-publish any scheduled posts whose time has passed
+  try {
+    await postRepository.bulkUpdatePosts(
+      { status: 'scheduled', publishedAt: { $lte: new Date() } },
+      { status: 'published' }
+    );
+  } catch (e) {
+    // Fail silently here; listing should still work even if this update fails
+  }
 
   const filter = {};
   if (status) filter.status = status;

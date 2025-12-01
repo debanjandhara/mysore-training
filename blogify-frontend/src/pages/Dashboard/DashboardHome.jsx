@@ -31,22 +31,82 @@ export default function DashboardHome() {
     totalComments: 0,
     totalDrafts: 0
   });
+  const [chartData, setChartData] = useState([
+    { name: 'Mon', views: 0, likes: 0 },
+    { name: 'Tue', views: 0, likes: 0 },
+    { name: 'Wed', views: 0, likes: 0 },
+    { name: 'Thu', views: 0, likes: 0 },
+    { name: 'Fri', views: 0, likes: 0 },
+    { name: 'Sat', views: 0, likes: 0 },
+    { name: 'Sun', views: 0, likes: 0 },
+  ]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         // Fetch counts in parallel
-        const [draftsData, commentsData] = await Promise.all([
+        const [draftsData, commentsData, postsData] = await Promise.all([
           postService.list({ status: 'draft', limit: 1, dashboard: 'true' }, token),
-          commentService.list({ limit: 1, dashboard: 'true' }, token)
+          commentService.list({ limit: 1, dashboard: 'true' }, token),
+          postService.list({ status: 'published', limit: 100, dashboard: 'true' }, token)
         ]);
 
-        setStats({
-          totalLikes: 0, // Aggregation requires backend support
-          totalComments: commentsData.total || 0,
-          totalDrafts: draftsData.total || 0
+        const posts = Array.isArray(postsData?.data)
+          ? postsData.data
+          : Array.isArray(postsData)
+          ? postsData
+          : [];
+
+        const totalLikes = posts.reduce(
+          (sum, post) => sum + (post.cachedStats?.aggregateRating || 0),
+          0
+        );
+
+        // Build simple weekly aggregation (by published date weekday)
+        const baseWeek = [
+          { name: 'Sun', views: 0, likes: 0 },
+          { name: 'Mon', views: 0, likes: 0 },
+          { name: 'Tue', views: 0, likes: 0 },
+          { name: 'Wed', views: 0, likes: 0 },
+          { name: 'Thu', views: 0, likes: 0 },
+          { name: 'Fri', views: 0, likes: 0 },
+          { name: 'Sat', views: 0, likes: 0 },
+        ];
+
+        posts.forEach((post) => {
+          const dateSource = post.publishedAt || post.createdAt;
+          if (!dateSource) return;
+
+          const d = new Date(dateSource);
+          if (Number.isNaN(d.getTime())) return;
+
+          const dayIndex = d.getDay(); // 0 (Sun) - 6 (Sat)
+          const views = post.cachedStats?.viewCount || 0;
+          const likes = post.cachedStats?.aggregateRating || 0;
+
+          baseWeek[dayIndex].views += views;
+          baseWeek[dayIndex].likes += likes;
         });
+
+        // Reorder to start week from Monday for display
+        const orderedWeek = [
+          baseWeek[1], // Mon
+          baseWeek[2], // Tue
+          baseWeek[3], // Wed
+          baseWeek[4], // Thu
+          baseWeek[5], // Fri
+          baseWeek[6], // Sat
+          baseWeek[0], // Sun
+        ];
+
+        setStats({
+          totalLikes,
+          totalComments: commentsData.total || 0,
+          totalDrafts: draftsData.total || 0,
+        });
+
+        setChartData(orderedWeek);
       } catch (error) {
         console.error("Failed to fetch dashboard stats:", error);
       } finally {
@@ -56,18 +116,6 @@ export default function DashboardHome() {
 
     fetchStats();
   }, [token]);
-
-  // Placeholder chart data (empty for now as we don't have history API)
-  const chartData = [
-    { name: 'Mon', views: 0, likes: 0 },
-    { name: 'Tue', views: 0, likes: 0 },
-    { name: 'Wed', views: 0, likes: 0 },
-    { name: 'Thu', views: 0, likes: 0 },
-    { name: 'Fri', views: 0, likes: 0 },
-    { name: 'Sat', views: 0, likes: 0 },
-    { name: 'Sun', views: 0, likes: 0 },
-  ];
-
   if (loading) return <div>Loading stats...</div>;
 
   return (
