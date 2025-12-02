@@ -23,9 +23,19 @@ function NavLink({ to, label }) {
 
 export default function Navbar() {
   const { currentTheme } = useTheme();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const location = useLocation();
   const isDashboard = location.pathname.startsWith("/dashboard");
+
+  const getInitials = (name) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+  };
   
   return (
     <header className={`sticky top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl transition-all duration-500 ${isDashboard ? "w-full border-border" : ""}`}>
@@ -42,12 +52,28 @@ export default function Navbar() {
         ) : (
           <div /> /* Spacer */
         )}
-        <nav className="flex gap-2">
+        <nav className="flex items-center gap-2">
           <NavLink to="/" label="Home" />
           {isAuthenticated && (
             <>
               <NavLink to="/dashboard" label="Dashboard" />
-              <NavLink to="/profile" label="Profile" />
+              <Link 
+                to="/profile" 
+                className="ml-2 relative group"
+                title={user?.name || "Profile"}
+              >
+                {user?.profileImage ? (
+                  <img 
+                    src={user.profileImage} 
+                    alt={user.name} 
+                    className="w-9 h-9 rounded-full object-cover border border-white/10 ring-2 ring-transparent group-hover:ring-primary/20 transition-all duration-300"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/10 to-secondary/10 border border-white/10 flex items-center justify-center text-primary font-bold text-sm ring-2 ring-transparent group-hover:ring-primary/20 transition-all duration-300">
+                    {getInitials(user?.name)}
+                  </div>
+                )}
+              </Link>
             </>
           )}
           {!isAuthenticated && <NavLink to="/auth" label="Login" />}

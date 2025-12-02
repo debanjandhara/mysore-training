@@ -17,7 +17,7 @@ const create = (data) => {
 const findById = (id) => {
   return Comment.findById(id)
     .populate('userId', 'name username profileImage')
-    .populate('postId', 'title slug');
+    .populate('postId', 'title slug authorId');
 };
 
 /**
@@ -118,7 +118,7 @@ const updateScore = (id, score) => {
  * @returns {Promise<Array>}
  */
 const findReplies = (parentId, options) => {
-  return Comment.find({ parentId, status: 'approved' })
+  return Comment.find({ parentId, status: { $in: ['approved', 'deleted'] } })
     .sort(options.sort)
     .skip(options.skip)
     .limit(options.limit)

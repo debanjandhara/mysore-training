@@ -61,14 +61,18 @@ export default function DashboardLayout() {
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border flex-col z-30">
         {/* Branding Area in Sidebar */}
         <div className="h-[72px] flex items-center px-6 border-b border-border">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-3 group focus:outline-none"
+          >
             <div 
-              className="w-8 h-8 rounded-xl shadow-lg shadow-primary/20 bg-gradient-to-br from-primary to-secondary"
+              className="w-8 h-8 rounded-xl shadow-lg shadow-primary/20 bg-gradient-to-br from-primary to-secondary group-hover:scale-105 transition-transform"
             />
-            <span className="text-xl font-bold tracking-tight text-foreground">
+            <span className="text-xl font-bold tracking-tight text-foreground group-hover:text-primary">
               Blogify
             </span>
-          </div>
+          </button>
         </div>
 
         {/* Scrollable Navigation Area */}

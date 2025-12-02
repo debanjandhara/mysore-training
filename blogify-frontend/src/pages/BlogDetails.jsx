@@ -138,7 +138,7 @@ const CommentNode = React.memo(({
                       >
                         <Flag size={12} /> Report
                       </button>
-                     {(isPostOwner || isAuthor) && (
+                     {(isPostOwner || isAuthor) && comment.content !== "[deleted_message]" && comment.status !== 'deleted' && (
                       <button 
                         onClick={() => { onDelete(comment._id); setIsMenuOpen(false); }}
                         className="flex items-center gap-2 w-full px-4 py-2 text-xs text-left text-destructive hover:bg-destructive/10"
@@ -293,7 +293,11 @@ export default function BlogDetails() {
 
   const viewCountedRef = useRef(false);
 
-  const isOwner = useMemo(() => user && post?.authorId === user._id, [user, post]);
+  const isOwner = useMemo(
+    () => !!user && !!post && (post.authorId === user._id || post.authorId?._id === user._id),
+    [user, post]
+  );
+
   const formattedDate = useMemo(() => post ? new Date(post.publishedAt || post.createdAt).toLocaleDateString() : "", [post]);
 
   useEffect(() => {
@@ -344,10 +348,16 @@ export default function BlogDetails() {
       ...prev,
       cachedStats: {
         ...prev.cachedStats,
-        aggregateRating: isLiked ? (prev.cachedStats.aggregateRating - 1) : (prev.cachedStats.aggregateRating + 1)
-      }
+        aggregateRating: isLiked
+          ? (prev.cachedStats.aggregateRating - 1)
+          : (prev.cachedStats.aggregateRating + 1),
+      },
     }));
-    try { await postService.like(post._id); } catch { setIsLiked(prev => !prev); }
+    try {
+      await postService.like(post._id);
+    } catch {
+      setIsLiked(prev => !prev);
+    }
   }, [user, post, isLiked, isOwner, navigate]);
 
   const handleShare = () => {
@@ -358,81 +368,130 @@ export default function BlogDetails() {
 
   const handleCommentSubmit = async (parentId = null) => {
     if (!user) return navigate("/auth");
+
+    // Post owner cannot start new top-level threads on their own post,
+    // but can reply to existing comments from others.
+    if (!parentId && isOwner) {
+      return;
+    }
+
     const text = parentId ? replyState.text : commentText;
     if (!text.trim()) return;
 
     try {
       const payload = { postId: post._id, content: text };
+      let newCommentData;
+
       if (parentId) {
-        await commentService.reply(parentId, payload);
+        newCommentData = await commentService.reply(parentId, payload);
         setReplyState({ id: null, text: "" });
       } else {
-        await commentService.create(payload);
+        newCommentData = await commentService.create(payload);
         setCommentText("");
       }
-      
-      const treeData = await commentService.getTree(post._id);
-      
-      setComments(Array.isArray(treeData) ? treeData : treeData.data || []);
-      
-      setInfoModal({ 
-        isOpen: true, 
-        message: "Your comment has been submitted! Please wait while the blogger approves it." 
-      });
+
+      // Optimistic Update: Update local state without reloading
+      // ONLY for the owner (since their comments are auto-approved).
+      // For regular users, we don't show the comment until approved (per request).
+      if (isOwner) {
+        const optimisticComment = {
+          ...newCommentData,
+          userId: user, // Manually populate user details for display
+          replies: [],
+          votes: { score: 0, upvotedBy: [], downvotedBy: [] }
+        };
+
+        setComments(prev => {
+          // Helper to recursively find parent and add reply
+          const insertReply = (nodes) => {
+            return nodes.map(node => {
+              if (node._id === parentId) {
+                return { ...node, replies: [...(node.replies || []), optimisticComment] };
+              }
+              if (node.replies?.length) {
+                return { ...node, replies: insertReply(node.replies) };
+              }
+              return node;
+            });
+          };
+
+          if (!parentId) {
+            return [optimisticComment, ...prev]; // Top-level: Prepend
+          }
+          return insertReply(prev); // Reply: Insert into tree
+        });
+      }
+
+      // Show approval notice for all submissions by non-owners (both top-level and replies)
+      if (!isOwner) {
+        setInfoModal({
+          isOpen: true,
+          message: "Your comment has been submitted! Please wait while the blogger approves it.",
+        });
+      }
+
     } catch (err) {
       console.error("Comment failed:", err);
     }
   };
 
-  const handleVoteComment = useCallback(async (commentId, action) => {
-    if (!user) return navigate("/auth");
+  const handleVoteComment = useCallback(
+    async (commentId, action) => {
+      if (!user) return navigate("/auth");
 
-    const updateTree = (nodes) => {
-      return nodes.map(node => {
-        if (node._id === commentId) {
-          const votes = { 
-            ...node.votes, 
-            upvotedBy: [...(node.votes?.upvotedBy || [])], 
-            downvotedBy: [...(node.votes?.downvotedBy || [])] 
-          };
-          
-          const wasUp = votes.upvotedBy.includes(user._id);
-          const wasDown = votes.downvotedBy.includes(user._id);
-          
-          if (wasUp) votes.upvotedBy = votes.upvotedBy.filter(id => id !== user._id);
-          if (wasDown) votes.downvotedBy = votes.downvotedBy.filter(id => id !== user._id);
-          
-          if (action === 'upvote') votes.upvotedBy.push(user._id);
-          if (action === 'downvote') votes.downvotedBy.push(user._id);
-          
-          votes.score = votes.upvotedBy.length - votes.downvotedBy.length;
-          
-          return { ...node, votes };
-        }
-        if (node.replies) {
-          return { ...node, replies: updateTree(node.replies) };
-        }
-        return node;
-      });
-    };
+      const updateTree = (nodes) => {
+        return nodes.map((node) => {
+          if (node._id === commentId) {
+            const votes = {
+              ...node.votes,
+              upvotedBy: [...(node.votes?.upvotedBy || [])],
+              downvotedBy: [...(node.votes?.downvotedBy || [])],
+            };
 
-    setComments(prev => updateTree(prev));
+            const wasUp = votes.upvotedBy.includes(user._id);
+            const wasDown = votes.downvotedBy.includes(user._id);
 
-    try {
-      await commentService.vote(commentId, action);
-    } catch (err) { 
-      console.error(err); 
-    }
-  }, [user, navigate]);
+            if (wasUp) votes.upvotedBy = votes.upvotedBy.filter((id) => id !== user._id);
+            if (wasDown) votes.downvotedBy = votes.downvotedBy.filter((id) => id !== user._id);
 
-  const handleDeleteComment = useCallback(async (commentId) => {
-    if (!window.confirm("Delete this comment?")) return;
-    try {
-      await commentService.delete(commentId);
-      const treeData = await commentService.getTree(post._id);
-      setComments(Array.isArray(treeData) ? treeData : treeData.data || []);
-    } catch (err) { console.error(err); }
-  }, [post]);
+            if (action === "upvote") votes.upvotedBy.push(user._id);
+            if (action === "downvote") votes.downvotedBy.push(user._id);
+
+            votes.score = votes.upvotedBy.length - votes.downvotedBy.length;
+
+            return { ...node, votes };
+          }
+          if (node.replies) {
+            return { ...node, replies: updateTree(node.replies) };
+          }
+          return node;
+        });
+      };
+
+      setComments((prev) => updateTree(prev));
+
+      try {
+        await commentService.vote(commentId, action);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    [user, navigate]
+  );
+
+  const handleDeleteComment = useCallback(
+    async (commentId) => {
+      if (!window.confirm("Delete this comment?")) return;
+      try {
+        await commentService.delete(commentId);
+        const treeData = await commentService.getTree(post._id);
+        setComments(Array.isArray(treeData) ? treeData : treeData.data || []);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    [post]
+  );
 
   const handleReportSubmit = (reason) => {
     console.log(`Reported comment ${reportModal.commentId} for: ${reason}`);
@@ -464,43 +523,68 @@ export default function BlogDetails() {
 
       <GlassCard className="overflow-hidden p-0 border border-border/30 bg-background/30 backdrop-blur-xl">
         <div className="relative h-[400px] w-full">
-          <img src={post.headerImage || "https://images.unsplash.com/photo-1499750310159-5b600aaf0320?auto=format&fit=crop&q=80"} 
-               alt={post.title} className="w-full h-full object-cover" />
+          <img
+            src={
+              post.headerImage ||
+              "https://images.unsplash.com/photo-1499750310159-5b600aaf0320?auto=format&fit=crop&q=80"
+            }
+            alt={post.title}
+            className="w-full h-full object-cover"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
           <div className="absolute bottom-0 p-8 md:p-12 w-full">
             <h1 className="text-3xl md:text-5xl font-extrabold text-foreground mb-4">{post.title}</h1>
             <div className="flex gap-4 text-sm font-medium text-foreground/80">
-              <span className="flex items-center gap-1"><Calendar size={16}/> {formattedDate}</span>
-              <span className="flex items-center gap-1"><Clock size={16}/> {Math.ceil((post.content?.length || 0) / 1000)} min read</span>
+              <span className="flex items-center gap-1">
+                <Calendar size={16} /> {formattedDate}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock size={16} /> {Math.ceil((post.content?.length || 0) / 1000)} min read
+              </span>
             </div>
           </div>
         </div>
 
         <div className="p-8 md:p-12">
-          {/* --- FIX 1: Added specific prose classes to force theme colors for headings, quotes, bold, etc --- */}
-          <article className="prose prose-lg dark:prose-invert max-w-none mb-12 text-foreground prose-headings:text-foreground prose-blockquote:text-foreground prose-strong:text-foreground prose-a:text-foreground"
-            dangerouslySetInnerHTML={{ __html: post.content }} />
+          <article
+            className="prose prose-lg dark:prose-invert max-w-none mb-12 text-foreground prose-headings:text-foreground prose-blockquote:text-foreground prose-strong:text-foreground prose-a:text-foreground"
+            dangerouslySetInnerHTML={{ __html: post.content }}
+          />
 
           <div className="border-t border-border/40 pt-8 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex gap-3">
-              <button 
-                onClick={handleLike} 
+              <button
+                onClick={handleLike}
                 disabled={isOwner}
-                className={`${STYLES.actionBtn} ${isLiked ? 'bg-primary/10 text-primary' : 'bg-muted/50 hover:bg-muted/80'} ${isOwner ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`${STYLES.actionBtn} ${
+                  isLiked ? "bg-primary/10 text-primary" : "bg-muted/50 hover:bg-muted/80"
+                } ${isOwner ? "opacity-50 cursor-not-allowed" : ""}`}
                 title={isOwner ? "You cannot like your own post" : "Like this post"}
               >
                 <ThumbsUp size={18} className={isLiked ? "fill-current" : ""} />
                 <span className="font-medium">{post.cachedStats?.aggregateRating || 0}</span>
               </button>
-              <button onClick={() => setShowComments(!showComments)} className={`${STYLES.actionBtn} ${showComments ? 'bg-primary/10 text-primary' : 'bg-muted/50 hover:bg-muted/80'}`}>
+              <button
+                onClick={() => setShowComments(!showComments)}
+                className={`${STYLES.actionBtn} ${
+                  showComments ? "bg-primary/10 text-primary" : "bg-muted/50 hover:bg-muted/80"
+                }`}
+              >
                 <MessageSquare size={18} />
                 <span className="font-medium">{comments.length}</span>
               </button>
             </div>
-            
+
             <div className="flex items-center gap-4">
-              <span className={STYLES.metaItem}><Eye size={18} /> {post.cachedStats?.viewCount || 0}</span>
-              <Button variant="outline" size="sm" onClick={handleShare} className="rounded-full gap-2">
+              <span className={STYLES.metaItem}>
+                <Eye size={18} /> {post.cachedStats?.viewCount || 0}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleShare}
+                className="rounded-full gap-2"
+              >
                 <Share2 size={16} /> {shareStatus === "copied" ? "Copied!" : "Share"}
               </Button>
             </div>
@@ -508,34 +592,48 @@ export default function BlogDetails() {
 
           <AnimatePresence>
             {showComments && (
-              <motion.section initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+              <motion.section
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+              >
                 <div className="mt-10 pt-8 border-t border-border/40">
                   <h3 className="text-xl font-bold mb-6">Discussion ({comments.length})</h3>
 
                   <div className="flex gap-4 mb-8">
-                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary shrink-0">
-                        {user?.name?.charAt(0) || "G"}
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary shrink-0">
+                      {user?.name?.charAt(0) || "G"}
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <textarea
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        placeholder={
+                          !user
+                            ? "Log in to comment"
+                            : isOwner
+                            ? "As the author, you can reply to readers but not start a new thread."
+                            : "What are your thoughts?"
+                        }
+                        className={STYLES.input}
+                        disabled={!user || isOwner}
+                        rows={3}
+                      />
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => handleCommentSubmit(null)}
+                          disabled={!commentText.trim() || !user || isOwner}
+                        >
+                          Post Comment <Send size={14} className="ml-2" />
+                        </Button>
                       </div>
-                      <div className="flex-1 space-y-3">
-                        <textarea
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          placeholder={user ? "What are your thoughts?" : "Log in to comment"}
-                          className={STYLES.input}
-                          disabled={!user}
-                          rows={3}
-                        />
-                        <div className="flex justify-end">
-                          <Button size="sm" onClick={() => handleCommentSubmit(null)} disabled={!commentText.trim() || !user}>
-                            Post Comment <Send size={14} className="ml-2" />
-                          </Button>
-                        </div>
-                      </div>
+                    </div>
                   </div>
 
                   <div className="space-y-6">
-                    {comments.map(comment => (
-                      <CommentNode 
+                    {comments.map((comment) => (
+                      <CommentNode
                         key={comment._id}
                         comment={comment}
                         user={user}
@@ -546,7 +644,9 @@ export default function BlogDetails() {
                         onReport={(id) => setReportModal({ isOpen: true, commentId: id })}
                         activeReplyId={replyState.id}
                         replyText={replyState.text}
-                        setReplyText={(text) => setReplyState(prev => ({...prev, text}))}
+                        setReplyText={(text) =>
+                          setReplyState((prev) => ({ ...prev, text }))
+                        }
                         submitReply={handleCommentSubmit}
                         cancelReply={() => setReplyState({ id: null, text: "" })}
                       />

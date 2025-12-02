@@ -29,7 +29,7 @@ export default function Footer() {
                <span className="text-h3 font-bold tracking-tight">Blogify</span>
             </div>
             <p className="text-small text-foreground/50 leading-relaxed max-w-xs">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.
+              This is your space to think out loud, to share what matters. Your story starts right here.
             </p>
           </div>
 
