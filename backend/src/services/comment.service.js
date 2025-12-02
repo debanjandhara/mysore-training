@@ -275,7 +275,11 @@ const getCommentTree = async (postId, options) => {
   const buildTree = (parentId, depth) => {
     if (depth > maxDepth) return [];
     return allComments
-      .filter(c => (c.parentId || null) == (parentId || null)) // Loose match for null/undefined
+      .filter(c => {
+        const cParentId = c.parentId ? c.parentId.toString() : 'root';
+        const currentParentId = parentId ? parentId.toString() : 'root';
+        return cParentId === currentParentId;
+      })
       .map(c => {
         const sanitized = sanitizeDeletedComment(c.toObject());
         return {

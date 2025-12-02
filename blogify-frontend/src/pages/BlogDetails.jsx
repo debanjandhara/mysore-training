@@ -138,7 +138,7 @@ const CommentNode = React.memo(({
                       >
                         <Flag size={12} /> Report
                       </button>
-                     {(isPostOwner || isAuthor) && (
+                     {(isPostOwner || isAuthor) && comment.content !== "[deleted_message]" && comment.status !== 'deleted' && (
                       <button 
                         onClick={() => { onDelete(comment._id); setIsMenuOpen(false); }}
                         className="flex items-center gap-2 w-full px-4 py-2 text-xs text-left text-destructive hover:bg-destructive/10"
@@ -380,17 +380,50 @@ export default function BlogDetails() {
 
     try {
       const payload = { postId: post._id, content: text };
+      let newCommentData;
+
       if (parentId) {
-        await commentService.reply(parentId, payload);
+        newCommentData = await commentService.reply(parentId, payload);
         setReplyState({ id: null, text: "" });
       } else {
-        await commentService.create(payload);
+        newCommentData = await commentService.create(payload);
         setCommentText("");
       }
-      const treeData = await commentService.getTree(post._id);
-      setComments(Array.isArray(treeData) ? treeData : treeData.data || []);
-      // Show approval notice only for new top-level comments, not for replies
-      if (!parentId) {
+
+      // Optimistic Update: Update local state without reloading
+      // ONLY for the owner (since their comments are auto-approved).
+      // For regular users, we don't show the comment until approved (per request).
+      if (isOwner) {
+        const optimisticComment = {
+          ...newCommentData,
+          userId: user, // Manually populate user details for display
+          replies: [],
+          votes: { score: 0, upvotedBy: [], downvotedBy: [] }
+        };
+
+        setComments(prev => {
+          // Helper to recursively find parent and add reply
+          const insertReply = (nodes) => {
+            return nodes.map(node => {
+              if (node._id === parentId) {
+                return { ...node, replies: [...(node.replies || []), optimisticComment] };
+              }
+              if (node.replies?.length) {
+                return { ...node, replies: insertReply(node.replies) };
+              }
+              return node;
+            });
+          };
+
+          if (!parentId) {
+            return [optimisticComment, ...prev]; // Top-level: Prepend
+          }
+          return insertReply(prev); // Reply: Insert into tree
+        });
+      }
+
+      // Show approval notice for all submissions by non-owners (both top-level and replies)
+      if (!isOwner) {
         setInfoModal({
           isOpen: true,
           message: "Your comment has been submitted! Please wait while the blogger approves it.",
